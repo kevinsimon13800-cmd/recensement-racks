@@ -252,7 +252,7 @@ ol.how li{margin:6px 0}
 
       <div class="dictwrap">
         <input id="dict" class="in" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="go"
-               placeholder="Dictée : « six étages, deux dynamiques… »" aria-label="Dictée ou commande écrite">
+               placeholder="Dictée : « AA01B six étages deux dynamiques trois palettes »" aria-label="Dictée ou commande écrite">
       </div>
 
       <details class="rem" id="remDet">
@@ -316,8 +316,8 @@ function normAddr(s) { return String(s == null ? '' : s).toUpperCase().replace(/
 function defaults() {
   var ch = Object.keys(EXPECTED);
   return {
-    v: 1, chambres: ch.slice(), racks: [],
-    cfg: { reprise: true, son: true, veille: true, continu: false },
+    v: 2, chambres: ch.slice(), racks: [],
+    cfg: { reprise: true, son: true, veille: true, continu: true, auto: true },
     form: { chambre: ch[0] || '', adresse: '', niveaux: null, dyn: 0, dynLevels: [], palettes: null, remarque: '', editingId: null },
     last: null, lastExport: null, lastChange: 0
   };
@@ -336,6 +336,7 @@ function load() {
         if (o.cfg) for (var k in o.cfg) d.cfg[k] = o.cfg[k];
         if (o.form) for (var f in o.form) d.form[f] = o.form[f];
         d.last = o.last || null; d.lastExport = o.lastExport || null; d.lastChange = o.lastChange || 0;
+if (!(o.v >= 2)) { d.cfg.continu = true; d.cfg.auto = true; }
       }
     }
   } catch (e) { }
@@ -682,17 +683,18 @@ function renderRegl() {
     opt('reprise', 'Reprendre les valeurs du rack précédent', 'Étages, dynamiques et format restent affichés : vous ne touchez que ce qui change.') +
     opt('son', 'Bip à l’enregistrement', 'Un bip court confirme chaque rack, sans regarder l’écran. (Le mode silencieux de l’iPhone peut le couper.)') +
     opt('veille', 'Garder l’écran allumé', ('wakeLock' in navigator) ? 'Évite que l’iPhone se verrouille entre deux racks.' : 'Non disponible sur cette version d’iOS : réglez la mise en veille dans Réglages > Luminosité et affichage.') +
-    opt('continu', 'Écoute vocale continue', 'Le micro se relance tout seul après chaque phrase (si votre iPhone le permet).') + '</div>';
+    opt('auto', 'Enregistrer tout seul à la voix', 'Une phrase complète (adresse, étages, dynamiques, palettes) enregistre le rack sans toucher l’écran. Si l’adresse est douteuse, rien n’est enregistré.') +
+opt('continu', 'Écoute vocale continue', 'Le micro se relance tout seul après chaque phrase (si votre iPhone le permet).') + '</div>';
   h += '<div class="card"><h2>Mode d’emploi</h2><ol class="how">' +
     '<li>Touchez <b>Chambre</b> en haut et choisissez la chambre.</li>' +
     '<li>L’adresse du prochain rack est déjà proposée. Corrigez-la au besoin (flèches <b>‹ ›</b> ou en touchant l’adresse).</li>' +
     '<li>Réglez <b>étages</b>, <b>dynamiques</b> et <b>format</b>, puis <b>ENREGISTRER</b>. L’adresse suivante s’affiche aussitôt.</li>' +
     '<li>Les valeurs du rack précédent sont reprises : si le rack suivant est identique, un seul geste suffit.</li>' +
-    '<li><b>À la voix</b> (bouton micro, ou micro du clavier dans le champ « Dictée ») : « six étages, deux dynamiques, trois palettes, valider ». Ou seulement trois chiffres : « six zéro trois ». Pour l’adresse : « adresse A A zéro un B ».</li>' +
+    '<li><b>À la voix</b> : touchez le micro une seule fois, puis dites tout d’un trait en commençant par l’adresse : « AA 01 B, six étages, deux dynamiques, trois palettes ». Le rack est enregistré tout seul (bip) et le micro écoute le suivant. Plus court : « AA 01 B, six, deux, trois ». « Annuler » efface le dernier. Si l’adresse est douteuse, rien n’est enregistré : vérifiez puis dites « valider ».</li>' +
     '<li>En fin de chambre : onglet <b>Envoyer</b>.</li></ol></div>';
   h += '<div class="card"><h2>Dictée vocale</h2><div class="small muted">Si le bouton micro ne fonctionne pas (ou n’apparaît pas), activez la dictée du clavier : <b>Réglages iPhone › Général › Clavier › Activer la dictée</b>, puis touchez le micro du clavier dans le champ « Dictée ». Dans une chambre sans réseau, la dictée peut ne pas marcher : les boutons restent utilisables.</div></div>';
   h += '<button type="button" class="btn dng" data-a="wipeAsk">Effacer toutes les données de ce téléphone</button>';
-  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 1 · données enregistrées sur ce téléphone uniquement</div>';
+  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 2 · données enregistrées sur ce téléphone uniquement</div>';
   $('v-regl').innerHTML = h;
 }
 
@@ -751,118 +753,201 @@ function strip(t) {
   if (s.normalize) s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   return s.replace(/\u0153/g, 'oe');
 }
-var NUM = { zero: 0, un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10, onze: 11, douze: 12 };
-var LETTER = { be: 'B', bee: 'B', ce: 'C', se: 'C', de: 'D', dee: 'D', ef: 'F', effe: 'F', ge: 'G', ash: 'H', ach: 'H', hache: 'H', ji: 'J', ka: 'K', el: 'L', elle: 'L', em: 'M', emme: 'M', en: 'N', enne: 'N', pe: 'P', ku: 'Q', cu: 'Q', er: 'R', erre: 'R', es: 'S', esse: 'S', te: 'T', ve: 'V', ix: 'X', iks: 'X', igrec: 'Y', zed: 'Z' };
-function numTok(t) { if (/^\d{1,2}$/.test(t)) return +t; return Object.prototype.hasOwnProperty.call(NUM, t) ? NUM[t] : null; }
-function isEtage(t) { return /^(etages?|niveaux?)$/.test(t); }
-function isDyn(t) { return /^dynamiques?$/.test(t); }
+var NUM = { zero: 0, un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, set: 7, cet: 7, huit: 8, neuf: 9, dix: 10, onze: 11, douze: 12 };
+var LETTER = { a: 'A', ah: 'A', ha: 'A', be: 'B', bee: 'B', bay: 'B', bai: 'B', baie: 'B', bey: 'B', ce: 'C', se: 'C', ces: 'C', ses: 'C', sait: 'C', cest: 'C', de: 'D', dee: 'D', des: 'D', eu: 'E', euh: 'E', ef: 'F', effe: 'F', ge: 'G', ash: 'H', ach: 'H', hache: 'H', ji: 'J', ka: 'K', el: 'L', elle: 'L', em: 'M', emme: 'M', en: 'N', enne: 'N', oh: 'O', pe: 'P', ku: 'Q', cu: 'Q', er: 'R', erre: 'R', es: 'S', esse: 'S', te: 'T', ve: 'V', ix: 'X', iks: 'X', igrec: 'Y', zed: 'Z' };
+function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+function numTok(t) { if (/^\d{1,2}$/.test(t)) return +t; return has(NUM, t) ? NUM[t] : null; }
+function isEtage(t) { return /^(etages?|niveaux?|etageres?)$/.test(t); }
+function isDyn(t) { return /^(dynamiques?|dynamics?|dyna|dynas)$/.test(t); }
 function isPal(t) { return /^pal+et+es?$/.test(t) || /^palet+es?$/.test(t) || t === 'pallets' || t === 'pallet'; }
-function isCmdSave(t) { return /^(valider|valide|validez|enregistrer|enregistre|enregistrez|suivant|suivante|termine)$/.test(t); }
+function isCmdSave(t) { return /^(valider|valide|validez|enregistrer|enregistre|enregistrez|suivant|suivante|termine|ok|okay)$/.test(t); }
 function isCmdUndo(t) { return /^(annuler|annule|supprimer|supprime|efface|effacer)$/.test(t); }
-function isKw(t) { return isEtage(t) || isDyn(t) || isPal(t) || isCmdSave(t) || isCmdUndo(t) || t === 'adresse' || t === 'adresses'; }
+function isKw(t) { return isEtage(t) || isDyn(t) || isPal(t) || isCmdSave(t) || isCmdUndo(t); }
+var SKIP = /^(adresse|adresses|rack|racks|le|la|l|emplacement|allee|position|alors|euh|bon|donc|numero)$/;
 
-function addrFromTokens(tk) {
-  var out = '', i = 0;
-  while (i < tk.length) {
-    var t = tk[i];
-    if (t === 'double' && i + 1 < tk.length) {
-      var nx = tk[i + 1], c = (nx.length === 1 && /[a-z]/.test(nx)) ? nx.toUpperCase() : LETTER[nx];
-      if (c) { out += c + c; i += 2; continue; }
-      if (nx === 've') { out += 'W'; i += 2; continue; }
-    }
-    if (/^[a-z]$/.test(t)) { out += t.toUpperCase(); i++; continue; }
-    if (/^\d+$/.test(t)) { out += t; i++; continue; }
-    var n = Object.prototype.hasOwnProperty.call(NUM, t) ? NUM[t] : null;
-    if (n !== null) { out += String(n); i++; continue; }
-    if (LETTER[t]) { out += LETTER[t]; i++; continue; }
-    if (/^[a-z0-9]+$/.test(t)) { out += t.toUpperCase(); i++; continue; }
-    i++;
-  }
-  return out;
+/* ---------- adresse : 2 lettres + 2 chiffres + 1 lettre (ex. AA01B) ---------- */
+function addrTokChars(t) {
+if (/^\d+$/.test(t)) return t;
+if (has(NUM, t) && t !== 'set' && t !== 'cet') return String(NUM[t]);
+if (/^[a-z]$/.test(t)) return t.toUpperCase();
+if (has(LETTER, t)) return LETTER[t];
+if (/^[a-z]{1,2}\d+[a-z]?$/.test(t) || /^\d+[a-z]$/.test(t)) return t.toUpperCase();
+if (/^[a-z]{2}$/.test(t) && !/^(et|le|la|au|ou|il|on|je|ma|ta|sa|ne|ni|si|ok|du|tu|mi|va|vu|lu|nu)$/.test(t)) return t.toUpperCase();
+return null;
+}
+function readAddress(tk, start) {
+var L1 = '', D = '', L2 = '', st = 0, i = start;
+for (; i < tk.length && st < 3; i++) {
+var t = tk[i];
+if (t === 'double' && st === 0 && !L1 && i + 1 < tk.length) {
+var c2 = addrTokChars(tk[i + 1]);
+if (c2 && /^[A-Z]$/.test(c2)) { L1 = c2 + c2; i++; continue; }
+}
+/* un nombre suivi de "etages", "dynamiques"... appartient aux valeurs, pas a l'adresse */
+if (numTok(t) !== null && i + 1 < tk.length && isKw(tk[i + 1])) break;
+var s = addrTokChars(t); if (s === null) break;
+var b = [L1, D, L2, st], ok = true;
+for (var j = 0; j < s.length && ok; j++) {
+var ch = s.charAt(j), dig = /\d/.test(ch);
+if (st === 0) { if (!dig) { if (L1.length < 2) L1 += ch; else ok = false; } else if (L1) { st = 1; D += ch; } else ok = false; }
+else if (st === 1) { if (dig || ch === 'O') { if (D.length < 2) D += (dig ? ch : '0'); else ok = false; } else { L2 = ch; st = 3; } }
+else ok = false;
+}
+if (!ok) { L1 = b[0]; D = b[1]; L2 = b[2]; st = b[3]; break; }
+}
+if (!L1 || !D) return null;
+return { heard: L1 + pad(D, 2) + L2, partial: st !== 3, start: start, end: i };
+}
+/* lettres qui se ressemblent a l'oral : une confusion entre elles compte moitie */
+var SON = ['BDPTVEGCW', 'AHK', 'MN', 'FS', 'IY', 'O0'];
+function subCost(x, y) { if (x === y) return 0; for (var q = 0; q < SON.length; q++) if (SON[q].indexOf(x) >= 0 && SON[q].indexOf(y) >= 0) return 0.5; return 1; }
+function lev(a, b) {
+var m = a.length, n = b.length, d = [], i, j;
+for (i = 0; i <= m; i++) { d[i] = [i]; }
+for (j = 1; j <= n; j++) d[0][j] = j;
+for (i = 1; i <= m; i++) for (j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + subCost(a.charAt(i - 1), b.charAt(j - 1)));
+return d[m][n];
+}
+/* Compare l'adresse entendue a la liste des racks attendus et choisit la plus plausible. */
+function resolveAddr(p, ctx) {
+var a = p.heard, ch = ctx.chambre, k;
+if (!p.partial) {
+if (expectedOf(ch).indexOf(a) >= 0) return { addr: a, chambre: ch, sure: true, heard: a };
+for (k in EXPECTED) if (EXPECTED[k].indexOf(a) >= 0) return { addr: a, chambre: k, sure: true, heard: a };
+}
+var cands = [];
+for (k in EXPECTED) EXPECTED[k].forEach(function (x) {
+var d = p.partial ? (x.indexOf(a) === 0 ? 1 : 9) : lev(a, x);
+if (d <= 1) cands.push({ addr: x, chambre: k, d: d, here: k === ch, todo: !(ctx.done && ctx.done(k, x)) });
+});
+var dmin = 9; cands.forEach(function (c) { if (c.d < dmin) dmin = c.d; });
+var top = cands.filter(function (c) { return c.d === dmin; });
+if (top.length === 1) return { addr: top[0].addr, chambre: top[0].chambre, sure: false, why: 'corrige', heard: a, options: [top[0].addr] };
+if (!cands.length) return p.partial ? { addr: null, chambre: ch, sure: false, why: 'incomplet', heard: a } : { addr: a, chambre: ch, sure: false, why: 'hors', heard: a };
+function pick(list, fn) { var r = list.filter(fn); return r.length ? r : list; }
+var best = top;
+if (ctx.suggest) { var sg = cands.filter(function (c) { return c.addr === ctx.suggest; }); if (sg.length) best = sg; }
+best = pick(best, function (c) { return c.here; });
+best = pick(best, function (c) { return c.todo; });
+var opts = top.filter(function (c) { return c.here; }).map(function (c) { return c.addr; });
+if (!opts.length) opts = top.map(function (c) { return c.addr; });
+return { addr: best[0].addr, chambre: best[0].chambre, sure: false, why: 'ambigu', heard: a, options: opts.slice(0, 4) };
 }
 
-/* Fonction pure : texte -> intentions. Testable sans interface. */
-function parseCommande(texte) {
-  var tk = strip(texte).replace(/[,.;:!?'’"«»()\-]/g, ' ').split(/\s+/).filter(Boolean);
-  var res = { adresse: null, niveaux: null, dyn: null, palettes: null, save: false, undo: false, notes: [], vu: false };
-  var used = {}, i, n;
-  function numBefore(k) { return (k > 0 && !used[k - 1] && numTok(tk[k - 1]) !== null) ? k - 1 : -1; }
-  function numAfter(k) { return (k + 1 < tk.length && !used[k + 1] && numTok(tk[k + 1]) !== null) ? k + 1 : -1; }
-  /* adresse */
-  for (i = 0; i < tk.length; i++) {
-    if (tk[i] === 'adresse' || tk[i] === 'adresses') {
-      var j = i + 1, part = [];
-      while (j < tk.length && !isKw(tk[j])) {
-        if (numTok(tk[j]) !== null && j + 1 < tk.length && (isEtage(tk[j + 1]) || isDyn(tk[j + 1]) || isPal(tk[j + 1]))) break;
-        part.push(tk[j]); j++;
-      }
-      for (var u = i; u < j; u++) used[u] = true;
-      var a = normAddr(addrFromTokens(part));
-      if (a) { res.adresse = a; res.vu = true; }
-      i = j - 1;
-    }
-  }
-  var hasKw = false;
-  for (i = 0; i < tk.length; i++) {
-    if (used[i]) continue;
-    var t = tk[i], k;
-    if (isEtage(t)) {
-      hasKw = true; k = numBefore(i); if (k < 0) k = numAfter(i);
-      if (k >= 0) { used[k] = used[i] = true; n = numTok(tk[k]); if (n >= 1 && n <= NIV_MAX) { res.niveaux = n; res.vu = true; } else res.notes.push(n + ' étages : valeur improbable'); }
-    } else if (isDyn(t)) {
-      hasKw = true;
-      var neg = (i > 0 && /^(sans|aucun|aucune|pas)$/.test(tk[i - 1])) || (i > 1 && tk[i - 1] === 'de' && tk[i - 2] === 'pas');
-      if (neg) { res.dyn = 0; res.vu = true; used[i] = true; }
-      else {
-        k = numBefore(i); if (k < 0) k = numAfter(i);
-        if (k >= 0) { used[k] = used[i] = true; res.dyn = numTok(tk[k]); res.vu = true; }
-      }
-    } else if (isPal(t)) {
-      hasKw = true; k = numBefore(i); if (k < 0) k = numAfter(i);
-      if (k >= 0) {
-        used[k] = used[i] = true; n = numTok(tk[k]);
-        if (n >= 2 && n <= 4) { res.palettes = n; res.vu = true; } else res.notes.push('format ' + n + ' palettes non prévu (2, 3 ou 4)');
-      }
-    } else if (isCmdSave(t)) { res.save = true; res.vu = true; used[i] = true; hasKw = true; }
-    else if (isCmdUndo(t)) {
-      /* "annuler" seul = annuler le dernier enregistrement */
-      res.undo = true; res.vu = true; used[i] = true; hasKw = true;
-    }
-  }
-  /* raccourci : trois nombres seuls = etages, dynamiques, palettes */
-  if (!hasKw && res.adresse === null) {
-    var nums = tk.filter(function (t) { return numTok(t) !== null; });
-    var onlyNums = tk.filter(function (t) { return numTok(t) === null && !/^(et|virgule|puis)$/.test(t); }).length === 0;
-    if (onlyNums && nums.length === 3) {
-      var a1 = numTok(nums[0]), b1 = numTok(nums[1]), c1 = numTok(nums[2]);
-      if (a1 >= 1 && a1 <= NIV_MAX && b1 >= 0 && b1 <= a1 && c1 >= 2 && c1 <= 4) { res.niveaux = a1; res.dyn = b1; res.palettes = c1; res.vu = true; }
-      else res.notes.push('trois chiffres : étages, dynamiques, palettes (ex. « six zéro trois »)');
-    }
-  }
-  return res;
+/* Fonction pure : texte -> intentions. ctx = { chambre, suggest, done(ch, adr) } */
+function parseCommande(texte, ctx) {
+ctx = ctx || {};
+var tk = strip(texte).replace(/[,.;:!?'’"«»()\/\-]/g, ' ').split(/\s+/).filter(Boolean);
+var res = { adresse: null, addr: null, niveaux: null, dyn: null, palettes: null, save: false, undo: false, notes: [], bad: false, vu: false, addrMiss: '' };
+var used = {}, i, n;
+function numBefore(k) { return (k > 0 && !used[k - 1] && numTok(tk[k - 1]) !== null) ? k - 1 : -1; }
+function numAfter(k) { return (k + 1 < tk.length && !used[k + 1] && numTok(tk[k + 1]) !== null) ? k + 1 : -1; }
+/* adresse : en tete de phrase (apres "adresse", "rack"... eventuels) */
+var s0 = 0; while (s0 < tk.length && SKIP.test(tk[s0])) s0++;
+var p = null;
+for (i = s0; i < Math.min(tk.length, s0 + 3) && !p; i++) {
+if (isKw(tk[i]) || (numTok(tk[i]) !== null && i + 1 < tk.length && isKw(tk[i + 1]))) break;
+p = readAddress(tk, i);
 }
+if (p) {
+for (i = 0; i < p.end; i++) used[i] = true;
+res.addr = resolveAddr(p, ctx); res.adresse = res.addr.addr; res.vu = true;
+} else if (s0 < tk.length && !isKw(tk[s0]) && numTok(tk[s0]) === null) {
+var miss = []; for (i = s0; i < tk.length && !isKw(tk[i]) && !(numTok(tk[i]) !== null && i + 1 < tk.length && isKw(tk[i + 1])); i++) { miss.push(tk[i]); used[i] = true; }
+res.addrMiss = miss.join(' ');
+}
+var hasKw = false;
+function deuxAvant(k) { return k > 0 && !used[k - 1] && tk[k - 1] === 'de' && !(k > 1 && /^(pas|plus)$/.test(tk[k - 2])) ? k - 1 : -1; }
+for (i = 0; i < tk.length; i++) {
+if (used[i]) continue;
+var t = tk[i], k;
+if (isEtage(t)) {
+hasKw = true; k = numBefore(i); if (k < 0) k = numAfter(i);
+if (k >= 0) { used[k] = used[i] = true; n = numTok(tk[k]); if (n >= 1 && n <= NIV_MAX) { res.niveaux = n; res.vu = true; } else { res.notes.push(n + ' étages : valeur improbable'); res.bad = true; } }
+} else if (isDyn(t)) {
+hasKw = true;
+var neg = (i > 0 && /^(sans|aucun|aucune|pas)$/.test(tk[i - 1])) || (i > 1 && tk[i - 1] === 'de' && /^(pas|plus)$/.test(tk[i - 2]));
+if (neg) { res.dyn = 0; res.vu = true; used[i] = true; }
+else {
+if ((k = deuxAvant(i)) >= 0) { used[k] = used[i] = true; res.dyn = 2; res.vu = true; }
+else {
+k = numBefore(i); if (k < 0) k = numAfter(i);
+if (k >= 0) { used[k] = used[i] = true; res.dyn = numTok(tk[k]); res.vu = true; }
+}
+}
+} else if (isPal(t)) {
+hasKw = true; k = numBefore(i);
+if (k < 0 && (k = deuxAvant(i)) >= 0) { used[k] = used[i] = true; res.palettes = 2; res.vu = true; }
+else if (k >= 0 || (k = numAfter(i)) >= 0) {
+used[k] = used[i] = true; n = numTok(tk[k]);
+if (n >= 2 && n <= 4) { res.palettes = n; res.vu = true; } else { res.notes.push('format ' + n + ' palettes non prévu (2, 3 ou 4)'); res.bad = true; }
+}
+} else if (isCmdSave(t)) { res.save = true; res.vu = true; used[i] = true; hasKw = true; }
+else if (isCmdUndo(t)) { res.undo = true; res.vu = true; used[i] = true; hasKw = true; }
+}
+/* raccourci : trois nombres seuls (apres l'adresse) = etages, dynamiques, palettes */
+if (!hasKw) {
+var rest = []; for (i = 0; i < tk.length; i++) if (!used[i] && !/^(et|virgule|puis|tiret)$/.test(tk[i])) rest.push(tk[i]);
+if (rest.length === 3 && rest.every(function (t) { return numTok(t) !== null; })) {
+var a1 = numTok(rest[0]), b1 = numTok(rest[1]), c1 = numTok(rest[2]);
+if (a1 >= 1 && a1 <= NIV_MAX && b1 >= 0 && b1 <= a1 && c1 >= 2 && c1 <= 4) { res.niveaux = a1; res.dyn = b1; res.palettes = c1; res.vu = true; }
+else { res.notes.push('trois chiffres : étages, dynamiques, palettes (ex. « six, deux, trois »)'); res.bad = true; }
+}
+}
+return res;
+}
+function scoreParse(r) { return (r.addr ? (r.addr.sure ? 4 : 1) : 0) + (r.niveaux != null ? 1 : 0) + (r.dyn != null ? 1 : 0) + (r.palettes != null ? 1 : 0) + (r.save ? 1 : 0); }
+
+var voiceAddr = null; /* adresse dictee et sure, en attente des valeurs manquantes */
 function applyCommande(texte, final) {
-  var r = parseCommande(texte), f = S.form, did = [];
-  if (!r.vu) { return { ok: false, msg: 'Pas compris : « ' + texte + ' ». Dites par ex. « six étages, deux dynamiques, trois palettes ».' }; }
-  if (r.undo && final !== false) {
-    if (undoSnap) { undoLast(); return { ok: true, msg: 'Dernier enregistrement annulé' }; }
-    return { ok: false, msg: 'Rien à annuler' };
-  }
-  if (r.adresse) { gotoAddress(r.adresse, true); did.push('adresse ' + r.adresse); }
-  if (r.niveaux != null) { f.niveaux = r.niveaux; dynConsistent(); did.push(r.niveaux + ' étages'); }
-  if (r.dyn != null) {
-    if (f.niveaux == null && r.niveaux == null) { r.notes.push('indiquez d’abord les étages'); }
-    else {
-      var d = r.dyn; if (d > f.niveaux) { r.notes.push('dynamiques (' + d + ') > étages (' + f.niveaux + ') : ramené à ' + f.niveaux); d = f.niveaux; }
-      f.dyn = d; dynConsistent(); did.push(d + ' dynamique' + (d > 1 ? 's' : ''));
-    }
-  }
-  if (r.palettes != null) { f.palettes = r.palettes; did.push(r.palettes + ' palettes'); }
-  persist(); refreshSaisie();
-  var msg = did.length ? 'Compris : ' + did.join(' · ') : '';
-  if (r.notes.length) msg += (msg ? ' — ' : '') + r.notes.join(' ; ');
-  if (r.save && final !== false) { var okSave = save(); return { ok: okSave, msg: okSave ? null : msg }; }
-  return { ok: did.length > 0, msg: msg || 'Pas compris' };
+var f = S.form, did = [], notes = [];
+var r = parseCommande(texte, { chambre: f.chambre, suggest: f.adresse, done: function (c, a) { return !!findRack(c, a); } });
+if (!r.vu && !r.addrMiss) return { ok: false, msg: 'Pas compris. Dites par ex. « AA 01 B, six étages, deux dynamiques, trois palettes ».' };
+if (r.undo && final !== false) {
+if (undoSnap) { undoLast(); voiceAddr = null; return { ok: true, msg: 'Dernier enregistrement annulé' }; }
+return { ok: false, msg: 'Rien à annuler' };
+}
+if (r.addrMiss && !r.save) return { ok: false, msg: 'Adresse pas comprise (« ' + r.addrMiss + ' ») : rien n’est rempli ni enregistré, répétez la phrase.' };
+var A = r.addr;
+if (A && A.addr) {
+if (A.chambre !== f.chambre) {
+if (S.chambres.indexOf(A.chambre) < 0) S.chambres.push(A.chambre);
+f.chambre = A.chambre; f.editingId = null; did.push(A.chambre);
+}
+gotoAddress(A.addr, true);
+if (!f.editingId) { f.niveaux = null; f.dyn = 0; f.dynLevels = []; f.palettes = null; f.remarque = ''; }
+did.push(A.addr);
+voiceAddr = A.sure ? A.addr : null;
+if (A.why === 'corrige') notes.push('entendu ' + A.heard + ', compris ' + A.addr + ' : vérifiez');
+else if (A.why === 'ambigu') notes.push('entendu ' + A.heard + ' : ' + A.options.join(' ou ') + ' ? (j’affiche ' + A.addr + ')');
+else if (A.why === 'hors') notes.push(A.addr + ' n’est pas dans la liste : vérifiez');
+} else if (A && A.why === 'incomplet') { notes.push('adresse incomplète (' + A.heard + ')'); voiceAddr = null; }
+if (r.niveaux != null) { f.niveaux = r.niveaux; dynConsistent(); did.push(r.niveaux + ' étages'); }
+if (r.dyn == null && A && A.addr && f.niveaux != null && !f.editingId) r.dyn = 0;
+if (r.dyn != null) {
+if (f.niveaux == null) { notes.push('dynamiques sans étages'); }
+else {
+var d = r.dyn; if (d > f.niveaux) { notes.push(d + ' dynamiques > ' + f.niveaux + ' étages : ramené à ' + f.niveaux); d = f.niveaux; r.bad = true; }
+f.dyn = d; dynConsistent(); did.push(d + ' dyn.');
+}
+}
+if (r.palettes != null) { f.palettes = r.palettes; did.push(r.palettes + ' pal.'); }
+notes = notes.concat(r.notes);
+persist(); refreshSaisie();
+var addrOk = !!f.adresse && voiceAddr === f.adresse && !r.addrMiss;
+var complet = !validate();
+var manque = [];
+if (f.niveaux == null) manque.push('étages'); if (f.palettes == null) manque.push('palettes');
+if (final !== false) {
+if (r.save || (S.cfg.auto && addrOk && complet && !r.bad && (r.niveaux != null || r.dyn != null || r.palettes != null))) {
+if (!r.addrMiss || r.save) { var okSave = save(); if (okSave) voiceAddr = null; return { ok: okSave, msg: null }; }
+}
+if (manque.length && f.adresse) notes.push('il manque : ' + manque.join(', '));
+if (!addrOk && complet && did.length) notes.push('vérifiez puis ENREGISTRER (ou dites « valider »)');
+}
+var msg = did.length ? did.join(' · ') : '';
+if (notes.length) msg += (msg ? ' — ' : '') + notes.join(' ; ');
+return { ok: did.length > 0 && !notes.length, msg: msg || 'Pas compris' };
 }
 
 /* --- reconnaissance vocale (si le navigateur la fournit) --- */
@@ -874,21 +959,22 @@ function startVoice() {
   if (!SR) return;
   try {
     rec = new SR(); rec.lang = 'fr-FR'; rec.interimResults = true; rec.maxAlternatives = 3; rec.continuous = false;
-    rec.onstart = function () { listening = true; micUI(); toast('J’écoute… dites par ex. « six étages, deux dynamiques, trois palettes »', null, null, 6000); };
+    rec.onstart = function () { listening = true; micUI(); toast('J’écoute… « AA 01 B, six étages, deux dynamiques, trois palettes »', null, null, 6000); };
     rec.onresult = function (ev) {
       var res = ev.results[ev.results.length - 1];
       if (!res.isFinal) { $('toastMsg').textContent = '« ' + res[0].transcript + ' »'; return; }
       errCount = 0;
       var chosen = null, i;
-      for (i = 0; i < res.length; i++) { if (parseCommande(res[i].transcript).vu) { chosen = res[i].transcript; break; } }
-      var out = applyCommande(chosen || res[0].transcript, true);
-      if (out.msg) toast(out.msg, null, out.ok ? 'good' : 'err', 5000);
+      var bestS = -1; for (i = 0; i < res.length; i++) { var sc = scoreParse(parseCommande(res[i].transcript, { chambre: S.form.chambre, suggest: S.form.adresse })); if (sc > bestS) { bestS = sc; chosen = res[i].transcript; } }
+      var heard = chosen || res[0].transcript;
+      var out = applyCommande(heard, true);
+      if (out.msg) toast('« ' + heard + ' » → ' + out.msg, null, out.ok ? 'good' : 'err', 8000);
     };
     rec.onerror = function (ev) {
       var e = ev && ev.error; errCount++;
       if (e === 'not-allowed' || e === 'service-not-allowed') { wantListen = false; toast('Micro refusé. Réglages iPhone › Safari › Micro, ou utilisez le micro du clavier dans « Dictée ».', null, 'err', 7000); }
       else if (e === 'network') { wantListen = false; toast('Pas de réseau pour la dictée. Utilisez les boutons, ou le micro du clavier.', null, 'err', 6000); }
-      else if (e === 'no-speech') { /* silence : on ignore */ }
+      else if (e === 'no-speech') { errCount--; /* silence : on ignore */ }
       else if (e !== 'aborted') { toast('Dictée indisponible (' + e + '). Utilisez le micro du clavier.', null, 'err', 6000); wantListen = false; }
     };
     rec.onend = function () {
