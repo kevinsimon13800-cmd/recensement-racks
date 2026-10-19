@@ -202,6 +202,8 @@ ol.how li{margin:6px 0}
 .addrow{display:flex;gap:10px;margin-top:6px}
 .addrow .in{flex:1;min-width:0}
 .addrow .btn{width:auto;min-width:110px;margin:0}
+.trash{width:52px;height:46px;border-radius:12px;background:var(--nok-bg);color:var(--nok);display:grid;place-items:center;margin-left:auto}
+#delBtn{margin-top:4px}
 </style>
 </head>
 <body>
@@ -259,6 +261,7 @@ ol.how li{margin:6px 0}
         <summary><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> Remarque (facultatif)</summary>
         <input id="remarque" class="in" type="text" autocomplete="off" placeholder="Ex. : lisse abîmée, rack décalé…" aria-label="Remarque">
       </details>
+    <button type="button" id="delBtn" class="btn dng" data-a="delCur" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg><span id="delLbl">Supprimer ce rack</span></button>
     </section>
 
     <section id="v-liste" class="view"></section>
@@ -504,7 +507,7 @@ function deleteRack(id) {
   var r = S.racks[i]; S.racks.splice(i, 1);
   if (S.form.editingId === id) { S.form.editingId = null; }
   touchChange(); refreshSaisie(); renderListe(); renderEnvoi();
-  toast(r.adresse + ' supprimé');
+  toast(r.adresse + ' supprimé', { label: 'Annuler', fn: function () { if (S.racks.some(function (x) { return x.id === r.id; })) return; S.racks.splice(Math.min(i, S.racks.length), 0, r); if (S.form.chambre === r.chambre && S.form.adresse === r.adresse) loadFromRack(r); touchChange(); refreshSaisie(); renderListe(); renderEnvoi(); toast(r.adresse + ' rétabli', null, 'good'); } }, null, 8000);
 }
 
 /* ============================ rendu "Saisie" ============================ */
@@ -527,6 +530,7 @@ function refreshSaisie() {
   if (f.remarque) $('remDet').open = true;
   var err = validate(), sb = $('saveBtn');
   $('saveLbl').textContent = f.editingId ? 'METTRE À JOUR' : 'ENREGISTRER';
+var db = $('delBtn'); if (db) { db.hidden = !f.editingId; $('delLbl').textContent = 'Supprimer le rack ' + f.adresse; }
   sb.className = 'save' + (f.editingId ? ' maj' : '');
   $('saveSub').textContent = err ? err : (f.adresse + ' · ' + f.niveaux + ' ét. · ' + f.dyn + ' dyn. · ' + f.palettes + ' pal.');
   sb.disabled = !!err && false; /* reste actif : affiche la raison au toucher */
@@ -571,8 +575,8 @@ function renderListe() {
   h += '<div class="hint" style="margin:8px 2px 14px">Sous chaque adresse : étages · dynamiques · palettes. Touchez une adresse pour la saisir ou la corriger.</div>';
   var rs = racksOf(ch).slice().sort(function (a, b) { return a.saisiLe < b.saisiLe ? -1 : 1; });
   if (rs.length) {
-    h += '<div class="card"><h2>Saisis dans cette chambre (' + rs.length + ')</h2><table class="rec"><thead><tr><th>Adresse</th><th>Étages</th><th>Dyn.</th><th>Pal.</th></tr></thead><tbody>';
-    rs.forEach(function (r) { h += '<tr data-a="openRack" data-ad="' + esc(r.adresse) + '"><td>' + esc(r.adresse) + '</td><td>' + r.niveaux + '</td><td>' + r.dynamiques + '</td><td>' + r.palettes + '</td></tr>'; });
+    h += '<div class="card"><h2>Saisis dans cette chambre (' + rs.length + ')</h2><table class="rec"><thead><tr><th>Adresse</th><th>Étages</th><th>Dyn.</th><th>Pal.</th><th></th></tr></thead><tbody>';
+    rs.forEach(function (r) { h += '<tr data-a="openRack" data-ad="' + esc(r.adresse) + '"><td>' + esc(r.adresse) + '</td><td>' + r.niveaux + '</td><td>' + r.dynamiques + '</td><td>' + r.palettes + '</td><td><button type="button" class="trash" data-a="delAsk" data-id="' + esc(r.id) + '" aria-label="Supprimer ' + esc(r.adresse) + '"><svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6\"/></svg></button></td></tr>'; });
     h += '</tbody></table></div>';
   }
   if (S.form.editingId) {
@@ -691,10 +695,11 @@ opt('continu', 'Écoute vocale continue', 'Le micro se relance tout seul après 
     '<li>Réglez <b>étages</b>, <b>dynamiques</b> et <b>format</b>, puis <b>ENREGISTRER</b>. L’adresse suivante s’affiche aussitôt.</li>' +
     '<li>Les valeurs du rack précédent sont reprises : si le rack suivant est identique, un seul geste suffit.</li>' +
     '<li><b>À la voix</b> : touchez le micro une seule fois, puis dites tout d’un trait en commençant par l’adresse : « AA 01 B, six étages, deux dynamiques, trois palettes ». Le rack est enregistré tout seul (bip) et le micro écoute le suivant. Plus court : « AA 01 B, six, deux, trois ». « Annuler » efface le dernier. Si l’adresse est douteuse, rien n’est enregistré : vérifiez puis dites « valider ».</li>' +
-    '<li>En fin de chambre : onglet <b>Envoyer</b>.</li></ol></div>';
+    '<li><b>Supprimer un rack</b> : onglet <b>Liste</b>, corbeille rouge sur sa ligne ; ou ouvrez le rack et touchez « Supprimer ce rack » ; ou dites « supprimer AA 01 B ». Le bouton « Annuler » le récupère pendant quelques secondes.</li>' +
+'<li>En fin de chambre : onglet <b>Envoyer</b>.</li></ol></div>';
   h += '<div class="card"><h2>Dictée vocale</h2><div class="small muted">Si le bouton micro ne fonctionne pas (ou n’apparaît pas), activez la dictée du clavier : <b>Réglages iPhone › Général › Clavier › Activer la dictée</b>, puis touchez le micro du clavier dans le champ « Dictée ». Dans une chambre sans réseau, la dictée peut ne pas marcher : les boutons restent utilisables.</div></div>';
   h += '<button type="button" class="btn dng" data-a="wipeAsk">Effacer toutes les données de ce téléphone</button>';
-  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 2 · données enregistrées sur ce téléphone uniquement</div>';
+  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 3 · données enregistrées sur ce téléphone uniquement</div>';
   $('v-regl').innerHTML = h;
 }
 
@@ -844,6 +849,7 @@ function numBefore(k) { return (k > 0 && !used[k - 1] && numTok(tk[k - 1]) !== n
 function numAfter(k) { return (k + 1 < tk.length && !used[k + 1] && numTok(tk[k + 1]) !== null) ? k + 1 : -1; }
 /* adresse : en tete de phrase (apres "adresse", "rack"... eventuels) */
 var s0 = 0; while (s0 < tk.length && SKIP.test(tk[s0])) s0++;
+if (s0 < tk.length && /^(supprimer|supprime|supprimez|efface|effacer|effacez)$/.test(tk[s0])) { res.del = true; used[s0] = true; s0++; while (s0 < tk.length && SKIP.test(tk[s0])) s0++; }
 var p = null;
 for (i = s0; i < Math.min(tk.length, s0 + 3) && !p; i++) {
 if (isKw(tk[i]) || (numTok(tk[i]) !== null && i + 1 < tk.length && isKw(tk[i + 1]))) break;
@@ -903,6 +909,15 @@ function applyCommande(texte, final) {
 var f = S.form, did = [], notes = [];
 var r = parseCommande(texte, { chambre: f.chambre, suggest: f.adresse, done: function (c, a) { return !!findRack(c, a); } });
 if (!r.vu && !r.addrMiss) return { ok: false, msg: 'Pas compris. Dites par ex. « AA 01 B, six étages, deux dynamiques, trois palettes ».' };
+if (r.del) {
+if (final === false) return { ok: false, msg: '' };
+var A0 = r.addr;
+if (!A0) { if (undoSnap) { undoLast(); voiceAddr = null; return { ok: true, msg: 'Dernier enregistrement annulé' }; } return { ok: false, msg: 'Dites « supprimer » puis l’adresse, ex. « supprimer AA 01 B »' }; }
+if (!A0.sure || !A0.addr) return { ok: false, msg: 'Adresse douteuse (' + A0.heard + ') : rien n’est supprimé' };
+var rk = findRack(A0.chambre, A0.addr);
+if (!rk) return { ok: false, msg: A0.addr + ' n’est pas saisi : rien à supprimer' };
+deleteRack(rk.id); voiceAddr = null; return { ok: true, msg: null };
+}
 if (r.undo && final !== false) {
 if (undoSnap) { undoLast(); voiceAddr = null; return { ok: true, msg: 'Dernier enregistrement annulé' }; }
 return { ok: false, msg: 'Rien à annuler' };
@@ -1021,6 +1036,7 @@ document.addEventListener('click', function (ev) {
       gotoAddress(nb, true); break;
     }
     case 'save': save(); break;
+case 'delCur': { var cr = S.racks.filter(function (r) { return r.id === f.editingId; })[0]; if (cr) confirmBox('Supprimer le rack ' + cr.adresse + ' ?', 'Oui, supprimer', function () { deleteRack(cr.id); }, true); break; }
     case 'mic': toggleVoice(); break;
     case 'listeCh': f.chambre = el.getAttribute('data-c'); f.editingId = null; f.remarque = ''; setFormValues(carry()); f.adresse = suggestNext(f.chambre, ''); { var rr = f.adresse ? findRack(f.chambre, f.adresse) : null; if (rr) loadFromRack(rr); } persist(); refreshSaisie(); renderListe(); break;
     case 'openRack': gotoAddress(el.getAttribute('data-ad'), true); setTab('saisie'); break;

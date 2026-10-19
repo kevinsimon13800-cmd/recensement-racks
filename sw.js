@@ -1,5 +1,5 @@
 /* Recensement des racks : fonctionne sans reseau apres la premiere ouverture */
-var CACHE = 'recensement-racks-v2';
+var CACHE = 'recensement-racks-v3';
 var FICHIERS = ['./', 'index.html', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FICHIERS); }).then(function () { return self.skipWaiting(); }));
