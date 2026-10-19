@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2C63C4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Recensement racks">
+<meta name="color-scheme" content="light dark">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Recensement des racks</title>
+<style>
+:root{
+  --bg:#EEF2F8; --card:#FFFFFF; --ink:#141B2A; --muted:#5B6780; --line:#CBD5E4; --soft:#E4ECF9;
+  --brand:#2C63C4; --brand-d:#1F4C9E; --on-brand:#FFFFFF;
+  --ok:#14804F; --ok-d:#0E6540; --on-ok:#FFFFFF; --ok-bg:#DFF3E8;
+  --warn:#B86E0A; --warn-bg:#FFF1D8; --nok:#C93630; --nok-bg:#FDE8E6;
+  --dyn:#7B3FC4; --dyn-bg:#EFE3FB;
+  --shadow:0 1px 2px rgba(20,30,50,.10),0 6px 18px rgba(20,30,50,.08);
+  --r:16px; --tab:58px;
+}
+:root[data-theme="dark"]{
+  --bg:#0D121D; --card:#18202F; --ink:#EEF2FA; --muted:#9AA7C0; --line:#2C3957; --soft:#202C48;
+  --brand:#6B9BF4; --brand-d:#8DB2F8; --on-brand:#0B1630;
+  --ok:#3CC184; --ok-d:#5BD39C; --on-ok:#06210F; --ok-bg:#12301F;
+  --warn:#E8A94A; --warn-bg:#3A2C12; --nok:#F2706A; --nok-bg:#3A1A19;
+  --dyn:#B98CF2; --dyn-bg:#2E2147;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 6px 18px rgba(0,0,0,.35);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D121D; --card:#18202F; --ink:#EEF2FA; --muted:#9AA7C0; --line:#2C3957; --soft:#202C48;
+    --brand:#6B9BF4; --brand-d:#8DB2F8; --on-brand:#0B1630;
+    --ok:#3CC184; --ok-d:#5BD39C; --on-ok:#06210F; --ok-bg:#12301F;
+    --warn:#E8A94A; --warn-bg:#3A2C12; --nok:#F2706A; --nok-bg:#3A1A19;
+    --dyn:#B98CF2; --dyn-bg:#2E2147;
+    --shadow:0 1px 2px rgba(0,0,0,.5),0 6px 18px rgba(0,0,0,.35);
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:18px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  touch-action:manipulation;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
+input,textarea{-webkit-user-select:text;user-select:text}
+button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer}
+button:disabled{opacity:.45}
+[hidden]{display:none!important}
+svg{display:block}
+#app{display:flex;flex-direction:column;height:100%;height:100dvh;max-width:560px;margin:0 auto}
+.views{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:calc(env(safe-area-inset-top) + 8px) 12px 14px}
+.view{display:none}.view.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:8px 10px;margin:0 0 8px}
+.card h2{margin:0 0 8px;font-size:15px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.lab{font-size:15px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+
+/* chambre */
+.chambre{display:flex;align-items:center;gap:10px;width:100%;text-align:left;min-height:56px;padding:6px 12px;margin:0 0 8px;border-radius:var(--r);background:var(--brand);color:var(--on-brand);box-shadow:var(--shadow)}
+.chambre .t{flex:1;min-width:0}
+.chambre .l{font-size:13px;opacity:.85;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.chambre b{display:block;font-size:20px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chambre .pg{font-size:19px;font-weight:800;background:rgba(255,255,255,.2);border-radius:12px;padding:5px 11px;white-space:nowrap}
+:root[data-theme="dark"] .chambre .pg{background:rgba(0,0,0,.18)}
+
+/* adresse */
+.addr{display:flex;align-items:stretch;gap:8px;padding:8px}
+.sq{flex:none;width:72px;min-height:76px;border-radius:14px;background:var(--soft);color:var(--brand);display:grid;place-items:center}
+.sq:active{background:var(--line)}
+.sq svg{width:34px;height:34px}
+.addrmid{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}
+#adresse{width:100%;font:800 36px/1.1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;text-align:center;letter-spacing:.04em;border:2px solid var(--line);border-radius:14px;background:var(--bg);color:var(--ink);padding:8px 4px;text-transform:uppercase;min-width:0}
+#adresse:focus{outline:none;border-color:var(--brand)}
+.tag{min-height:20px;text-align:center;font-size:13px;font-weight:700;margin-top:2px;color:var(--muted)}
+.tag.edit{color:var(--warn)}
+.tag.nouv{color:var(--ok)}
+
+/* stepper */
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.stp{display:flex;align-items:stretch;gap:8px}
+.stp button{flex:none;width:88px;min-height:68px;border-radius:14px;background:var(--soft);color:var(--brand);font-size:42px;font-weight:700;line-height:1}
+.stp button:active{background:var(--line)}
+.stp output{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:14px;background:var(--bg);border:2px solid var(--line);min-height:68px;line-height:1}
+.stp output .v{font-size:40px;font-weight:800}
+.stp output small{font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+.stp output.vide{color:var(--muted)}
+.stp output.dyn.has{color:var(--dyn);border-color:var(--dyn);background:var(--dyn-bg)}
+.stp output.dyn.has small{color:var(--dyn)}
+.hint{margin:8px 2px 0;font-size:14px;color:var(--muted)}
+.tiles{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.tile{flex:1 1 52px;min-width:52px;min-height:60px;border-radius:14px;border:2px solid var(--line);background:var(--bg);font-size:22px;font-weight:800;color:var(--muted)}
+.tile.on{background:var(--dyn);border-color:var(--dyn);color:#fff}
+.tilelab{font-size:13px;color:var(--muted);margin-top:8px}
+
+/* palettes */
+.seg{display:flex;gap:8px}
+.seg button{flex:1;min-height:70px;border-radius:14px;border:2px solid var(--line);background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.seg button b{font-size:34px;line-height:1}
+.seg button span{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.seg button.on{background:var(--brand);border-color:var(--brand);color:var(--on-brand)}
+.seg button.on span{color:var(--on-brand);opacity:.9}
+
+details.rem{margin:0 0 10px}
+details.rem summary{list-style:none;cursor:pointer;min-height:48px;display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:700;padding:0 6px}
+details.rem summary::-webkit-details-marker{display:none}
+.in{width:100%;font:inherit;font-size:18px;border:2px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);padding:14px;min-height:56px}
+.in:focus{outline:none;border-color:var(--brand)}
+.dictwrap{position:relative;margin:0 0 10px}
+.dictwrap .in{padding-right:14px}
+
+/* dock */
+.dock{flex:none;display:flex;gap:10px;padding:8px 12px 8px;background:var(--bg);border-top:1px solid var(--line)}
+.mic{flex:none;width:84px;min-height:72px;border-radius:16px;background:var(--brand);color:var(--on-brand);display:grid;place-items:center;box-shadow:var(--shadow)}
+.mic svg{width:38px;height:38px}
+.mic.on{background:var(--nok);animation:pulse 1s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(201,54,48,.55)}100%{box-shadow:0 0 0 18px rgba(201,54,48,0)}}
+.save{flex:1;min-height:72px;border-radius:16px;background:var(--ok);color:var(--on-ok);font-size:24px;font-weight:800;letter-spacing:.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:var(--shadow)}
+.save small{font-size:13px;font-weight:600;opacity:.92;margin-top:2px;max-width:100%;padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.save:active{background:var(--ok-d)}
+.save.maj{background:var(--warn);color:#fff}
+
+/* barre d'onglets */
+.tabs{flex:none;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+.tabs button{flex:1;min-height:var(--tab);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--muted);font-size:13px;font-weight:700;position:relative}
+.tabs button svg{width:24px;height:24px}
+.tabs button.on{color:var(--brand)}
+.tabs .badge{position:absolute;top:6px;left:calc(50% + 8px);min-width:20px;height:20px;border-radius:10px;background:var(--warn);color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center;padding:0 5px}
+
+/* toast */
+.toast{position:fixed;left:14px;right:14px;bottom:calc(var(--tab) + 98px + env(safe-area-inset-bottom));max-width:532px;margin:0 auto;background:#1B2438;color:#fff;border-radius:16px;padding:14px 16px;display:none;align-items:center;gap:12px;box-shadow:0 8px 28px rgba(0,0,0,.35);z-index:30;font-size:17px;font-weight:600}
+.toast.on{display:flex}
+.toast .m{flex:1;min-width:0}
+.toast button{flex:none;min-height:48px;padding:0 16px;border-radius:12px;background:rgba(255,255,255,.18);font-weight:800;color:#fff}
+.toast.err{background:var(--nok)}
+.toast.good{background:var(--ok-d);color:#fff}
+.flash{position:fixed;inset:0;pointer-events:none;background:var(--ok);opacity:0;z-index:25}
+.flash.go{animation:fl .5s ease-out}
+@keyframes fl{0%{opacity:.35}100%{opacity:0}}
+
+/* liste */
+.chips{display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;scroll-snap-type:x proximity}
+.chips .chip{flex:none;scroll-snap-align:start}
+.chip{min-height:56px;padding:0 16px;border-radius:28px;border:2px solid var(--line);background:var(--card);font-weight:800;font-size:17px;white-space:nowrap}
+.chip.on{background:var(--brand);border-color:var(--brand);color:var(--on-brand)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.rk{min-height:64px;border-radius:14px;border:2px solid var(--line);background:var(--card);font:800 19px ui-monospace,"SF Mono",Menlo,Consolas,monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15}
+.rk i{font:600 12px system-ui,-apple-system,sans-serif;font-style:normal;color:var(--muted)}
+.rk.done{background:var(--ok-bg);border-color:var(--ok);color:var(--ok-d)}
+:root[data-theme="dark"] .rk.done{color:var(--ok)}
+.rk.hors{border-style:dashed;border-color:var(--brand)}
+.rk.cur{outline:3px solid var(--warn);outline-offset:1px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--muted);margin:2px 2px 10px}
+.legend span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:6px;vertical-align:-1px;border:2px solid var(--line)}
+.legend .a::before{background:var(--ok-bg);border-color:var(--ok)}
+.legend .b::before{background:var(--card)}
+.legend .c::before{border:2px dashed var(--brand)}
+table.rec{width:100%;border-collapse:collapse;font-size:16px}
+table.rec th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:center;padding:4px 2px}
+table.rec th:first-child,table.rec td:first-child{text-align:left}
+table.rec td{padding:9px 2px;border-top:1px solid var(--line);text-align:center;font-weight:700}
+table.rec td:first-child{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+table.rec tr{cursor:pointer}
+
+/* boutons génériques */
+.btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:68px;border-radius:16px;background:var(--soft);color:var(--brand);font-weight:800;font-size:19px;margin:0 0 10px;padding:0 14px;text-align:center}
+.btn.pri{background:var(--brand);color:var(--on-brand);box-shadow:var(--shadow);min-height:84px;font-size:22px}
+.btn.dng{background:var(--nok-bg);color:var(--nok)}
+.btn svg{width:28px;height:28px;flex:none}
+.stat{display:flex;gap:10px;margin-bottom:10px}
+.stat div{flex:1;border-radius:14px;background:var(--soft);padding:10px;text-align:center}
+.stat b{display:block;font-size:30px;line-height:1.1}
+.stat span{font-size:13px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.alert{border-radius:14px;padding:12px 14px;margin:0 0 10px;font-weight:600;font-size:16px}
+.alert.warn{background:var(--warn-bg);color:var(--warn)}
+.alert.nok{background:var(--nok-bg);color:var(--nok)}
+.alert.ok{background:var(--ok-bg);color:var(--ok-d)}
+:root[data-theme="dark"] .alert.ok{color:var(--ok)}
+.opt{display:flex;align-items:center;gap:12px;min-height:68px;padding:8px 2px;border-top:1px solid var(--line)}
+.opt:first-of-type{border-top:0}
+.opt .tx{flex:1}.opt .tx b{display:block;font-size:18px}.opt .tx span{font-size:14px;color:var(--muted)}
+.sw{flex:none;position:relative;width:64px;height:38px;border-radius:19px;background:var(--line);transition:background .15s}
+.sw::after{content:"";position:absolute;top:4px;left:4px;width:30px;height:30px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.sw.on{background:var(--ok)}
+.sw.on::after{transform:translateX(26px)}
+ol.how{margin:0;padding-left:22px;font-size:16px}
+ol.how li{margin:6px 0}
+
+/* modales */
+.mask{position:fixed;inset:0;background:rgba(10,16,30,.55);z-index:40;display:none;align-items:flex-end;justify-content:center}
+.mask.on{display:flex}
+.sheet{width:100%;max-width:560px;max-height:88%;overflow-y:auto;background:var(--bg);border-radius:22px 22px 0 0;padding:16px 14px calc(16px + env(safe-area-inset-bottom))}
+.sheet h3{margin:0 0 12px;font-size:20px}
+.cho{display:flex;align-items:center;gap:12px;width:100%;text-align:left;min-height:68px;padding:10px 14px;border-radius:16px;border:2px solid var(--line);background:var(--card);margin:0 0 10px;font-weight:800;font-size:19px}
+.cho.on{border-color:var(--brand);background:var(--soft)}
+.cho .n{flex:1;min-width:0}.cho .p{font-size:15px;color:var(--muted);font-weight:700}
+.two{display:flex;gap:10px}.two .btn{margin:0}
+.addrow{display:flex;gap:10px;margin-top:6px}
+.addrow .in{flex:1;min-width:0}
+.addrow .btn{width:auto;min-width:110px;margin:0}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="views">
+
+    <!-- ============ SAISIE ============ -->
+    <section id="v-saisie" class="view on">
+      <button id="chambreBtn" class="chambre" data-a="chambre" type="button">
+        <span class="t"><span class="l">Chambre</span><b id="chambreNom">…</b></span>
+        <span class="pg" id="progress">0/0</span>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+
+      <div class="card addr">
+        <button class="sq" data-a="prevAddr" type="button" aria-label="Adresse précédente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <div class="addrmid">
+          <input id="adresse" type="text" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-label="Adresse du rack" placeholder="Adresse">
+          <div id="addrTag" class="tag"></div>
+        </div>
+        <button class="sq" data-a="nextAddr" type="button" aria-label="Adresse suivante"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+      </div>
+
+      <div class="card">
+        <div class="stp">
+          <button type="button" data-a="step" data-f="niv" data-d="-1" aria-label="Un étage de moins">−</button>
+          <output id="niv-val" aria-live="polite" aria-label="Nombre d'étages"><span class="v">—</span><small>étages</small></output>
+          <button type="button" data-a="step" data-f="niv" data-d="1" aria-label="Un étage de plus">+</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="stp">
+          <button type="button" data-a="step" data-f="dyn" data-d="-1" aria-label="Un dynamique de moins">−</button>
+          <output id="dyn-val" class="dyn" aria-live="polite" aria-label="Étages dynamiques"><span class="v">0</span><small>dynamiques</small></output>
+          <button type="button" data-a="step" data-f="dyn" data-d="1" aria-label="Un dynamique de plus">+</button>
+        </div>
+        <div id="dynTiles"></div>
+      </div>
+
+      <div class="card">
+        <div class="seg" id="pal" role="group" aria-label="Format">
+          <button type="button" data-a="pal" data-v="2"><b>2</b><span>palettes</span></button>
+          <button type="button" data-a="pal" data-v="3"><b>3</b><span>palettes</span></button>
+          <button type="button" data-a="pal" data-v="4"><b>4</b><span>palettes</span></button>
+        </div>
+      </div>
+
+      <div class="dictwrap">
+        <input id="dict" class="in" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="go"
+               placeholder="Dictée : « six étages, deux dynamiques… »" aria-label="Dictée ou commande écrite">
+      </div>
+
+      <details class="rem" id="remDet">
+        <summary><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> Remarque (facultatif)</summary>
+        <input id="remarque" class="in" type="text" autocomplete="off" placeholder="Ex. : lisse abîmée, rack décalé…" aria-label="Remarque">
+      </details>
+    </section>
+
+    <section id="v-liste" class="view"></section>
+    <section id="v-envoi" class="view"></section>
+    <section id="v-regl" class="view"></section>
+  </div>
+
+  <div class="dock" id="dock">
+    <button id="micBtn" class="mic" type="button" data-a="mic" aria-label="Commande vocale" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg>
+    </button>
+    <button id="saveBtn" class="save" type="button" data-a="save"><span id="saveLbl">ENREGISTRER</span><small id="saveSub"></small></button>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button type="button" class="on" data-a="tab" data-v="saisie"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Saisie</button>
+    <button type="button" data-a="tab" data-v="liste"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Liste</button>
+    <button type="button" data-a="tab" data-v="envoi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 14v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg>Envoyer<span class="badge" id="badgeEnvoi" hidden>!</span></button>
+    <button type="button" data-a="tab" data-v="regl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>Réglages</button>
+  </nav>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"><span class="m" id="toastMsg"></span><button type="button" id="toastBtn" hidden></button></div>
+<div id="flash" class="flash"></div>
+<div id="mask" class="mask"><div class="sheet" id="sheet"></div></div>
+
+<script>
+(function () {
+'use strict';
+
+/* ---------------------------------------------------------------
+   Liste des racks attendus par chambre (issue de RackControl, 9 oct.)
+   Sert uniquement a proposer l'adresse suivante et a compter l'avancement.
+   --------------------------------------------------------------- */
+var EXPECTED = {"Chambre frais-1": ["AA01A", "AA01B", "AA02A", "AA02B", "AA03A", "AA03B", "AA04A", "AA04B", "AA05A", "AA05B", "AA06A", "AA06B", "AA07A", "AA07B", "AA08A", "AA08B", "AB01A", "AB01B", "AB02A", "AB02B", "AB03A", "AB03B", "AB04A", "AB04B", "AB05A", "AB05B", "AB06A", "AB06B", "AB07A", "AB07B", "AB08A", "AB08B", "AC01A", "AC01B", "AC02A", "AC02B", "AC03A", "AC03B", "AC04A", "AC04B", "AC05A", "AC05B", "AC06A", "AC06B", "AC07A", "AC07B", "AC08A", "AC08B"], "Chambre Surge-2": ["BA01A", "BA01B", "BA02A", "BA02B", "BA03A", "BA03B", "BA04A", "BA04B", "BA05A", "BA05B", "BA06A", "BA06B", "BA07A", "BA07B", "BA08A", "BA08B", "BB01A", "BB01B", "BB02A", "BB02B", "BB03A", "BB03B", "BB04A", "BB04B", "BB05A", "BB05B", "BB06A", "BB06B", "BB07A", "BB07B", "BB08A", "BB08B", "BC01A", "BC01B", "BC02A", "BC02B", "BC03A", "BC03B", "BC04A", "BC04B", "BC05A", "BC05B", "BC06A", "BC06B", "BC07A", "BC07B", "BC08A", "BC08B"], "Chambre Surge-3": ["CA01A", "CA01B", "CA02A", "CA02B", "CA03A", "CA03B", "CA04A", "CA04B", "CA05A", "CA05B", "CA06A", "CA06B", "CA07A", "CA07B", "CA08A", "CA08B", "CB01A", "CB01B", "CB02A", "CB02B", "CB03A", "CB03B", "CB04A", "CB04B", "CB05A", "CB05B", "CB06A", "CB06B", "CB07A", "CB07B", "CB08A", "CB08B"]};
+
+var KEY = 'recensement-racks-v1';
+var NIV_MAX = 12;
+
+/* ============================ utilitaires ============================ */
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function pad(n, w) { var s = String(n); while (s.length < w) s = '0' + s; return s; }
+function nowIso() { return new Date().toISOString(); }
+function uid() { return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function fmtDate(iso) {
+  if (!iso) return '';
+  var d = new Date(iso); if (isNaN(d)) return '';
+  return pad(d.getDate(), 2) + '/' + pad(d.getMonth() + 1, 2) + '/' + d.getFullYear() + ' ' + pad(d.getHours(), 2) + ':' + pad(d.getMinutes(), 2);
+}
+function stamp() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1, 2) + '-' + pad(d.getDate(), 2); }
+function normAddr(s) { return String(s == null ? '' : s).toUpperCase().replace(/[\s ]+/g, ''); }
+
+/* ============================ etat ============================ */
+function defaults() {
+  var ch = Object.keys(EXPECTED);
+  return {
+    v: 1, chambres: ch.slice(), racks: [],
+    cfg: { reprise: true, son: true, veille: true, continu: false },
+    form: { chambre: ch[0] || '', adresse: '', niveaux: null, dyn: 0, dynLevels: [], palettes: null, remarque: '', editingId: null },
+    last: null, lastExport: null, lastChange: 0
+  };
+}
+var S = load();
+var storageOk = true;
+function load() {
+  var d = defaults();
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) {
+      var o = JSON.parse(raw);
+      if (o && typeof o === 'object') {
+        if (Array.isArray(o.chambres)) d.chambres = o.chambres;
+        if (Array.isArray(o.racks)) d.racks = o.racks;
+        if (o.cfg) for (var k in o.cfg) d.cfg[k] = o.cfg[k];
+        if (o.form) for (var f in o.form) d.form[f] = o.form[f];
+        d.last = o.last || null; d.lastExport = o.lastExport || null; d.lastChange = o.lastChange || 0;
+      }
+    }
+  } catch (e) { }
+  return d;
+}
+function persist() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); storageOk = true; }
+  catch (e) { storageOk = false; }
+  updateBadge();
+}
+function touchChange() { S.lastChange = Date.now(); persist(); }
+
+/* ============================ racks ============================ */
+function findRack(ch, addr) {
+  for (var i = 0; i < S.racks.length; i++) if (S.racks[i].chambre === ch && S.racks[i].adresse === addr) return S.racks[i];
+  return null;
+}
+function racksOf(ch) { return S.racks.filter(function (r) { return r.chambre === ch; }); }
+function expectedOf(ch) { return EXPECTED[ch] || []; }
+function progressOf(ch) {
+  var exp = expectedOf(ch), done = 0;
+  exp.forEach(function (a) { if (findRack(ch, a)) done++; });
+  var all = racksOf(ch).length;
+  return { done: done, total: exp.length, all: all, hors: all - done };
+}
+
+/* ---------- navigation entre adresses ---------- */
+function patternStep(addr, dir) {
+  var m = /^(.*?)(\d+)([A-Z]?)$/.exec(addr);
+  if (!m) return '';
+  var pre = m[1], num = m[2], suf = m[3];
+  if (suf) {
+    if (dir > 0) {
+      if (suf === 'A') return pre + num + 'B';
+      if (suf === 'B') return pre + pad(+num + 1, num.length) + 'A';
+      if (suf === 'Z') return '';
+      return pre + num + String.fromCharCode(suf.charCodeAt(0) + 1);
+    }
+    if (suf === 'B') return pre + num + 'A';
+    if (suf === 'A') { if (+num <= 1) return ''; return pre + pad(+num - 1, num.length) + 'B'; }
+    return pre + num + String.fromCharCode(suf.charCodeAt(0) - 1);
+  }
+  var n = +num + dir; if (n < 0) return '';
+  return pre + pad(n, num.length);
+}
+function neighbor(ch, addr, dir) {
+  var list = expectedOf(ch), i = list.indexOf(addr);
+  if (i >= 0 && list[i + dir]) return list[i + dir];
+  return patternStep(addr, dir);
+}
+function suggestNext(ch, from) {
+  var list = expectedOf(ch), i = list.indexOf(from), k, a;
+  if (i >= 0) {
+    for (k = 1; k <= list.length; k++) { a = list[(i + k) % list.length]; if (!findRack(ch, a)) return a; }
+    return '';
+  }
+  var p = from ? patternStep(from, 1) : '', guard = 0;
+  while (p && findRack(ch, p) && guard++ < 300) p = patternStep(p, 1);
+  if (p) return p;
+  for (k = 0; k < list.length; k++) if (!findRack(ch, list[k])) return list[k];
+  return '';
+}
+
+/* ============================ formulaire ============================ */
+function carry() {
+  if (S.cfg.reprise && S.last) return { niveaux: S.last.niveaux, dyn: S.last.dyn, dynLevels: allLevels(S.last.dyn), palettes: S.last.palettes };
+  return { niveaux: null, dyn: 0, dynLevels: [], palettes: null };
+}
+function setFormValues(v) {
+  var f = S.form;
+  f.niveaux = v.niveaux; f.dyn = v.dyn; f.dynLevels = v.dynLevels; f.palettes = v.palettes;
+}
+function loadFromRack(r) {
+  var f = S.form;
+  f.editingId = r.id; f.niveaux = r.niveaux; f.dyn = r.dynamiques;
+  f.dynLevels = allLevels(r.dynamiques);
+  f.palettes = r.palettes; f.remarque = r.remarque || '';
+}
+function gotoAddress(addr, keepValues) {
+  var f = S.form; addr = normAddr(addr); f.adresse = addr;
+  var r = addr ? findRack(f.chambre, addr) : null;
+  if (r) loadFromRack(r);
+  else {
+    var was = f.editingId; f.editingId = null;
+    if (was) { setFormValues(carry()); f.remarque = ''; }
+    else if (!keepValues && f.niveaux == null && S.last && S.cfg.reprise) setFormValues(carry());
+  }
+  persist(); refreshSaisie();
+}
+function selectChambre(name) {
+  var f = S.form;
+  if (S.chambres.indexOf(name) < 0) S.chambres.push(name);
+  f.chambre = name; f.editingId = null; f.remarque = '';
+  setFormValues(carry());
+  f.adresse = suggestNext(name, '') ;
+  var r = f.adresse ? findRack(name, f.adresse) : null; if (r) loadFromRack(r);
+  persist(); refreshSaisie(); renderListe();
+}
+function dynConsistent() {
+  /* Regle metier : les etages dynamiques sont TOUJOURS les N premiers niveaux en partant du sol. */
+  var f = S.form;
+  if (f.niveaux == null) { f.dyn = 0; f.dynLevels = []; return; }
+  if (f.dyn > f.niveaux) f.dyn = f.niveaux;
+  if (f.dyn < 0) f.dyn = 0;
+  f.dynLevels = allLevels(f.dyn);
+}
+function allLevels(n) { var a = []; for (var i = 1; i <= n; i++) a.push(i); return a; }
+function setNiveaux(n) {
+  var f = S.form; f.niveaux = Math.max(1, Math.min(NIV_MAX, n));
+  dynConsistent(); persist(); refreshSaisie();
+}
+function setDyn(n) {
+  var f = S.form; if (f.niveaux == null) { f.dyn = 0; return; }
+  f.dyn = Math.max(0, Math.min(f.niveaux, n)); dynConsistent(); persist(); refreshSaisie();
+}
+function setPalettes(n) { S.form.palettes = n; persist(); refreshSaisie(); }
+
+function validate() {
+  var f = S.form;
+  if (!f.chambre) return 'Choisissez la chambre';
+  if (!f.adresse) return "Saisissez l'adresse";
+  if (f.niveaux == null) return "Indiquez le nombre d'étages";
+  if (f.palettes == null) return 'Choisissez le format (2, 3 ou 4 palettes)';
+  return '';
+}
+var undoSnap = null;
+function save() {
+  var f = S.form, err = validate();
+  if (err) { beep(false); toast(err, null, 'err'); return false; }
+  var existing = f.editingId ? S.racks.filter(function (r) { return r.id === f.editingId; })[0] : findRack(f.chambre, f.adresse);
+  var rec = {
+    id: existing ? existing.id : uid(), chambre: f.chambre, adresse: f.adresse,
+    niveaux: f.niveaux, dynamiques: f.dyn,
+    niveauxDynamiques: allLevels(f.dyn),
+    palettes: f.palettes, remarque: (f.remarque || '').trim(),
+    saisiLe: existing ? existing.saisiLe : nowIso(), modifieLe: nowIso()
+  };
+  var snap = { prev: existing ? JSON.parse(JSON.stringify(existing)) : null, id: rec.id, form: JSON.parse(JSON.stringify(f)), last: S.last ? JSON.parse(JSON.stringify(S.last)) : null };
+  if (existing) { var i = S.racks.indexOf(existing); S.racks[i] = rec; } else S.racks.push(rec);
+  S.last = { niveaux: rec.niveaux, dyn: rec.dynamiques, dynLevels: allLevels(rec.dynamiques), palettes: rec.palettes };
+  undoSnap = snap;
+  var next = suggestNext(f.chambre, rec.adresse);
+  f.editingId = null; f.remarque = ''; f.adresse = next;
+  var nr = next ? findRack(f.chambre, next) : null;
+  if (nr) loadFromRack(nr); else setFormValues(carry());
+  touchChange(); refreshSaisie(); renderListe(); renderEnvoi();
+  beep(true); flash();
+  var p = progressOf(rec.chambre);
+  var msg = rec.adresse + ' enregistré · ' + rec.niveaux + ' étages · ' + rec.dynamiques + ' dyn. · ' + rec.palettes + ' pal.';
+  if (!next && p.total && p.done >= p.total) msg += ' — chambre terminée !';
+  toast(msg, { label: 'Annuler', fn: undoLast }, 'good', 7000);
+  return true;
+}
+function undoLast() {
+  if (!undoSnap) return;
+  var s = undoSnap; undoSnap = null;
+  var i = -1; S.racks.forEach(function (r, k) { if (r.id === s.id) i = k; });
+  if (i >= 0) { if (s.prev) S.racks[i] = s.prev; else S.racks.splice(i, 1); }
+  S.form = s.form; S.last = s.last;
+  touchChange(); refreshSaisie(); renderListe(); renderEnvoi(); toast('Dernier enregistrement annulé');
+}
+function deleteRack(id) {
+  var i = -1; S.racks.forEach(function (r, k) { if (r.id === id) i = k; });
+  if (i < 0) return;
+  var r = S.racks[i]; S.racks.splice(i, 1);
+  if (S.form.editingId === id) { S.form.editingId = null; }
+  touchChange(); refreshSaisie(); renderListe(); renderEnvoi();
+  toast(r.adresse + ' supprimé');
+}
+
+/* ============================ rendu "Saisie" ============================ */
+function refreshSaisie() {
+  var f = S.form, p = progressOf(f.chambre);
+  $('chambreNom').textContent = f.chambre || 'Choisir…';
+  $('progress').textContent = p.total ? (p.done + '/' + p.total) : String(p.all);
+  var ad = $('adresse'); if (document.activeElement !== ad) ad.value = f.adresse;
+  var tag = $('addrTag');
+  if (!f.adresse) { tag.className = 'tag'; tag.textContent = ''; }
+  else if (f.editingId) { tag.className = 'tag edit'; tag.textContent = 'Déjà saisi — vous le modifiez'; }
+  else { tag.className = 'tag nouv'; tag.textContent = expectedOf(f.chambre).indexOf(f.adresse) >= 0 ? 'Nouveau rack' : 'Nouveau rack (hors liste)'; }
+  var nv = $('niv-val'); nv.firstChild.textContent = f.niveaux == null ? '—' : f.niveaux; nv.className = f.niveaux == null ? 'vide' : '';
+  var dv = $('dyn-val'); dv.firstChild.textContent = f.dyn; dv.className = 'dyn' + (f.dyn > 0 ? ' has' : '');
+  $('dynTiles').innerHTML = (f.niveaux != null && f.dyn > 0)
+    ? '<div class="hint" style="margin:6px 2px 0;text-align:center">Dynamiques : ' + (f.dyn === 1 ? 'le niveau 1' : 'les niveaux 1 à ' + f.dyn) + ' (depuis le sol)</div>' : '';
+  var pb = $('pal').children;
+  for (var i = 0; i < pb.length; i++) pb[i].className = (f.palettes === +pb[i].getAttribute('data-v')) ? 'on' : '';
+  var rm = $('remarque'); if (document.activeElement !== rm) rm.value = f.remarque || '';
+  if (f.remarque) $('remDet').open = true;
+  var err = validate(), sb = $('saveBtn');
+  $('saveLbl').textContent = f.editingId ? 'METTRE À JOUR' : 'ENREGISTRER';
+  sb.className = 'save' + (f.editingId ? ' maj' : '');
+  $('saveSub').textContent = err ? err : (f.adresse + ' · ' + f.niveaux + ' ét. · ' + f.dyn + ' dyn. · ' + f.palettes + ' pal.');
+  sb.disabled = !!err && false; /* reste actif : affiche la raison au toucher */
+  updateBadge();
+}
+function updateBadge() {
+  var b = $('badgeEnvoi'); if (!b) return;
+  var n = S.racks.length, pend = n > 0 && (!S.lastExport || S.lastChange > S.lastExport);
+  b.hidden = !pend;
+}
+
+/* ============================ onglets ============================ */
+var VIEW = 'saisie';
+function setTab(v) {
+  VIEW = v; $('toast').className = 'toast';
+  ['saisie', 'liste', 'envoi', 'regl'].forEach(function (n) { $('v-' + n).className = 'view' + (n === v ? ' on' : ''); });
+  var bs = $('tabs').children;
+  for (var i = 0; i < bs.length; i++) bs[i].className = bs[i].getAttribute('data-v') === v ? 'on' : '';
+  $('dock').style.display = v === 'saisie' ? 'flex' : 'none';
+  if (v === 'liste') renderListe(); if (v === 'envoi') renderEnvoi(); if (v === 'regl') renderRegl();
+  document.querySelector('.views').scrollTop = 0;
+}
+
+/* ============================ rendu "Liste" ============================ */
+function renderListe() {
+  var el = $('v-liste'), ch = S.form.chambre, p = progressOf(ch), h = '';
+  h += '<div class="chips" style="margin-bottom:10px">' + S.chambres.map(function (c) {
+    var q = progressOf(c); return '<button type="button" class="chip' + (c === ch ? ' on' : '') + '" data-a="listeCh" data-c="' + esc(c) + '">' + esc(c) + ' · ' + (q.total ? q.done + '/' + q.total : q.all) + '</button>';
+  }).join('') + '</div>';
+  var exp = expectedOf(ch), extras = racksOf(ch).filter(function (r) { return exp.indexOf(r.adresse) < 0; });
+  h += '<div class="legend"><span class="a">saisi</span><span class="b">à faire</span><span class="c">hors liste</span></div>';
+  h += '<div class="grid">';
+  exp.forEach(function (a) {
+    var r = findRack(ch, a);
+    h += '<button type="button" class="rk' + (r ? ' done' : '') + (S.form.adresse === a ? ' cur' : '') + '" data-a="openRack" data-ad="' + esc(a) + '">' + esc(a) + (r ? '<i>' + r.niveaux + ' · ' + r.dynamiques + ' · ' + r.palettes + 'p</i>' : '') + '</button>';
+  });
+  extras.forEach(function (r) {
+    h += '<button type="button" class="rk done hors' + (S.form.adresse === r.adresse ? ' cur' : '') + '" data-a="openRack" data-ad="' + esc(r.adresse) + '">' + esc(r.adresse) + '<i>' + r.niveaux + ' · ' + r.dynamiques + ' · ' + r.palettes + 'p</i></button>';
+  });
+  h += '</div>';
+  if (!exp.length && !extras.length) h += '<div class="card muted">Aucun rack saisi dans cette chambre.</div>';
+  h += '<div class="hint" style="margin:8px 2px 14px">Sous chaque adresse : étages · dynamiques · palettes. Touchez une adresse pour la saisir ou la corriger.</div>';
+  var rs = racksOf(ch).slice().sort(function (a, b) { return a.saisiLe < b.saisiLe ? -1 : 1; });
+  if (rs.length) {
+    h += '<div class="card"><h2>Saisis dans cette chambre (' + rs.length + ')</h2><table class="rec"><thead><tr><th>Adresse</th><th>Étages</th><th>Dyn.</th><th>Pal.</th></tr></thead><tbody>';
+    rs.forEach(function (r) { h += '<tr data-a="openRack" data-ad="' + esc(r.adresse) + '"><td>' + esc(r.adresse) + '</td><td>' + r.niveaux + '</td><td>' + r.dynamiques + '</td><td>' + r.palettes + '</td></tr>'; });
+    h += '</tbody></table></div>';
+  }
+  if (S.form.editingId) {
+    var cur = S.racks.filter(function (r) { return r.id === S.form.editingId; })[0];
+    if (cur) h += '<button type="button" class="btn dng" data-a="delAsk" data-id="' + esc(cur.id) + '">Supprimer le rack ' + esc(cur.adresse) + '</button>';
+  }
+  el.innerHTML = h;
+}
+
+/* ============================ export ============================ */
+function chambreOrder() { return S.chambres.slice(); }
+function sortedRacks() {
+  var order = chambreOrder();
+  return S.racks.slice().sort(function (a, b) {
+    var ca = order.indexOf(a.chambre), cb = order.indexOf(b.chambre); if (ca !== cb) return ca - cb;
+    var ea = expectedOf(a.chambre).indexOf(a.adresse), eb = expectedOf(b.chambre).indexOf(b.adresse);
+    if (ea >= 0 && eb >= 0 && ea !== eb) return ea - eb;
+    if ((ea >= 0) !== (eb >= 0)) return ea >= 0 ? -1 : 1;
+    return a.adresse < b.adresse ? -1 : (a.adresse > b.adresse ? 1 : 0);
+  });
+}
+function buildJson() {
+  var rs = sortedRacks().map(function (r) {
+    return { chambre: r.chambre, adresse: r.adresse, niveaux: r.niveaux, dynamiques: r.dynamiques, niveauxDynamiques: allLevels(r.dynamiques), palettes: r.palettes, remarque: r.remarque || '', saisiLe: r.saisiLe, modifieLe: r.modifieLe, id: r.id };
+  });
+  return JSON.stringify({ application: 'Recensement-racks', version: 1, exporteLe: nowIso(), chambres: chambreOrder(), nbRacks: rs.length, racks: rs }, null, 1);
+}
+function csvCell(v) { v = String(v == null ? '' : v); return /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+function buildCsv() {
+  var L = ['Chambre;Adresse;Nb etages;Nb etages dynamiques;Niveaux dynamiques (depuis le sol);Format (palettes);Remarque;Saisi le'];
+  sortedRacks().forEach(function (r) {
+    L.push([r.chambre, r.adresse, r.niveaux, r.dynamiques, r.dynamiques ? (r.dynamiques === 1 ? '1' : '1 a ' + r.dynamiques) : '', r.palettes, r.remarque || '', fmtDate(r.saisiLe)].map(csvCell).join(';'));
+  });
+  return '﻿' + L.join('\r\n') + '\r\n';
+}
+function fileName() { return 'Recensement-racks_' + stamp(); }
+function download(name, text, type) {
+  var blob = new Blob([text], { type: type });
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+}
+function markExported() { S.lastExport = Date.now(); persist(); renderEnvoi(); }
+function shareFiles() {
+  if (!S.racks.length) { toast('Rien à envoyer : aucun rack saisi', null, 'err'); return; }
+  var n = fileName(), js = buildJson(), cs = buildCsv();
+  var files = [new File([js], n + '.json', { type: 'application/json' }), new File([cs], n + '.csv', { type: 'text/csv' })];
+  var data = { files: files, title: 'Recensement des racks', text: 'Recensement des racks du ' + stamp() + ' — ' + S.racks.length + ' racks' };
+  if (navigator.canShare && navigator.share && navigator.canShare(data)) {
+    navigator.share(data).then(markExported).catch(function (e) {
+      if (e && e.name === 'AbortError') return;
+      download(n + '.json', js, 'application/json'); markExported();
+      toast('Partage impossible : fichier téléchargé à la place', null, 'err');
+    });
+  } else {
+    download(n + '.json', js, 'application/json'); markExported();
+    toast('Fichier téléchargé (app Fichiers, dossier Téléchargements)');
+  }
+}
+function importFile(file) {
+  var rd = new FileReader();
+  rd.onload = function () {
+    try {
+      var o = JSON.parse(String(rd.result)); if (!o || !Array.isArray(o.racks)) throw new Error('format');
+      var add = 0, upd = 0;
+      o.racks.forEach(function (r) {
+        if (!r || !r.chambre || !r.adresse) return;
+        r.adresse = normAddr(r.adresse);
+        if (S.chambres.indexOf(r.chambre) < 0) S.chambres.push(r.chambre);
+        var ex = findRack(r.chambre, r.adresse);
+        var rec = { id: r.id || uid(), chambre: r.chambre, adresse: r.adresse, niveaux: +r.niveaux, dynamiques: +r.dynamiques || 0, niveauxDynamiques: allLevels(Math.min(+r.dynamiques || 0, +r.niveaux || 0)), palettes: +r.palettes, remarque: r.remarque || '', saisiLe: r.saisiLe || nowIso(), modifieLe: r.modifieLe || nowIso() };
+        if (!rec.niveaux || !rec.palettes) return;
+        if (ex) { if ((rec.modifieLe || '') > (ex.modifieLe || '')) { S.racks[S.racks.indexOf(ex)] = rec; upd++; } }
+        else { S.racks.push(rec); add++; }
+      });
+      touchChange(); refreshSaisie(); renderListe(); renderEnvoi();
+      toast(add + ' rack(s) ajouté(s), ' + upd + ' mis à jour', null, 'good');
+    } catch (e) { toast('Fichier illisible : ce n’est pas un export de cette application', null, 'err'); }
+  };
+  rd.readAsText(file);
+}
+
+function renderEnvoi() {
+  var el = $('v-envoi'), n = S.racks.length, h = '';
+  var pend = n > 0 && (!S.lastExport || S.lastChange > S.lastExport);
+  h += '<div class="stat"><div><b>' + n + '</b><span>racks saisis</span></div><div><b>' + S.chambres.filter(function (c) { return racksOf(c).length; }).length + '</b><span>chambres</span></div></div>';
+  if (!storageOk) h += '<div class="alert nok">Le téléphone refuse de garder les données (navigation privée ?). Envoyez le fichier tout de suite après chaque chambre.</div>';
+  if (!n) h += '<div class="alert warn">Rien à envoyer pour l’instant.</div>';
+  else if (pend) h += '<div class="alert warn">' + (S.lastExport ? 'Des racks ont été saisis depuis le dernier envoi (' + fmtDate(new Date(S.lastExport).toISOString()) + ').' : 'Ces données n’ont pas encore été envoyées.') + '</div>';
+  else h += '<div class="alert ok">Tout est envoyé (' + fmtDate(new Date(S.lastExport).toISOString()) + ').</div>';
+  h += '<button type="button" class="btn pri" data-a="share"' + (n ? '' : ' disabled') + '><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 14v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg>Envoyer le fichier</button>';
+  h += '<div class="hint" style="margin:-2px 2px 14px">Choisissez ensuite « Mail », « Fichiers » ou « AirDrop » dans la fenêtre de l’iPhone. Deux fichiers partent ensemble (.json pour la GMAO, .csv lisible dans Excel).</div>';
+  h += '<div class="card"><h2>Par chambre</h2>' + S.chambres.map(function (c) {
+    var q = progressOf(c); return '<div class="row" style="padding:6px 0;border-top:1px solid var(--line)"><b>' + esc(c) + '</b><span class="muted">' + (q.total ? q.done + ' / ' + q.total + ' racks' : q.all + ' racks') + (q.hors ? ' (+' + q.hors + ' hors liste)' : '') + '</span></div>';
+  }).join('') + '</div>';
+  h += '<button type="button" class="btn" data-a="dlJson"' + (n ? '' : ' disabled') + '>Télécharger le .json</button>';
+  h += '<button type="button" class="btn" data-a="dlCsv"' + (n ? '' : ' disabled') + '>Télécharger le .csv</button>';
+  h += '<button type="button" class="btn" data-a="copy"' + (n ? '' : ' disabled') + '>Copier le tableau (à coller dans un mail)</button>';
+  h += '<label class="btn" style="cursor:pointer">Reprendre un fichier déjà exporté<input id="impFile" type="file" accept=".json,application/json" hidden></label>';
+  el.innerHTML = h;
+  updateBadge();
+}
+
+/* ============================ reglages ============================ */
+function opt(k, t, d) { return '<div class="opt"><div class="tx"><b>' + t + '</b><span>' + d + '</span></div><button type="button" class="sw' + (S.cfg[k] ? ' on' : '') + '" data-a="cfg" data-k="' + k + '" role="switch" aria-checked="' + (S.cfg[k] ? 'true' : 'false') + '" aria-label="' + esc(t) + '"></button></div>'; }
+function renderRegl() {
+  var h = '<div class="card"><h2>Confort</h2>' +
+    opt('reprise', 'Reprendre les valeurs du rack précédent', 'Étages, dynamiques et format restent affichés : vous ne touchez que ce qui change.') +
+    opt('son', 'Bip à l’enregistrement', 'Un bip court confirme chaque rack, sans regarder l’écran. (Le mode silencieux de l’iPhone peut le couper.)') +
+    opt('veille', 'Garder l’écran allumé', ('wakeLock' in navigator) ? 'Évite que l’iPhone se verrouille entre deux racks.' : 'Non disponible sur cette version d’iOS : réglez la mise en veille dans Réglages > Luminosité et affichage.') +
+    opt('continu', 'Écoute vocale continue', 'Le micro se relance tout seul après chaque phrase (si votre iPhone le permet).') + '</div>';
+  h += '<div class="card"><h2>Mode d’emploi</h2><ol class="how">' +
+    '<li>Touchez <b>Chambre</b> en haut et choisissez la chambre.</li>' +
+    '<li>L’adresse du prochain rack est déjà proposée. Corrigez-la au besoin (flèches <b>‹ ›</b> ou en touchant l’adresse).</li>' +
+    '<li>Réglez <b>étages</b>, <b>dynamiques</b> et <b>format</b>, puis <b>ENREGISTRER</b>. L’adresse suivante s’affiche aussitôt.</li>' +
+    '<li>Les valeurs du rack précédent sont reprises : si le rack suivant est identique, un seul geste suffit.</li>' +
+    '<li><b>À la voix</b> (bouton micro, ou micro du clavier dans le champ « Dictée ») : « six étages, deux dynamiques, trois palettes, valider ». Ou seulement trois chiffres : « six zéro trois ». Pour l’adresse : « adresse A A zéro un B ».</li>' +
+    '<li>En fin de chambre : onglet <b>Envoyer</b>.</li></ol></div>';
+  h += '<div class="card"><h2>Dictée vocale</h2><div class="small muted">Si le bouton micro ne fonctionne pas (ou n’apparaît pas), activez la dictée du clavier : <b>Réglages iPhone › Général › Clavier › Activer la dictée</b>, puis touchez le micro du clavier dans le champ « Dictée ». Dans une chambre sans réseau, la dictée peut ne pas marcher : les boutons restent utilisables.</div></div>';
+  h += '<button type="button" class="btn dng" data-a="wipeAsk">Effacer toutes les données de ce téléphone</button>';
+  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 1 · données enregistrées sur ce téléphone uniquement</div>';
+  $('v-regl').innerHTML = h;
+}
+
+/* ============================ feuilles / modales ============================ */
+function openSheet(html) { $('sheet').innerHTML = html; $('mask').className = 'mask on'; }
+function closeSheet() { $('mask').className = 'mask'; }
+function sheetChambre() {
+  var h = '<h3>Chambre</h3>' + S.chambres.map(function (c) {
+    var q = progressOf(c);
+    return '<button type="button" class="cho' + (c === S.form.chambre ? ' on' : '') + '" data-a="pickCh" data-c="' + esc(c) + '"><span class="n">' + esc(c) + '</span><span class="p">' + (q.total ? q.done + ' / ' + q.total : q.all + ' racks') + '</span></button>';
+  }).join('');
+  h += '<div class="lab" style="margin:12px 2px 0">Autre chambre</div><div class="addrow"><input id="newCh" class="in" type="text" autocomplete="off" placeholder="Nom de la chambre" aria-label="Nom de la nouvelle chambre"><button type="button" class="btn pri" data-a="addCh" style="min-height:56px;font-size:18px">Ajouter</button></div>';
+  openSheet(h);
+}
+function confirmBox(msg, okLabel, fn, danger) {
+  openSheet('<h3>' + esc(msg) + '</h3><div class="two"><button type="button" class="btn" data-a="closeSheet">Non, garder</button><button type="button" class="btn ' + (danger ? 'dng' : 'pri') + '" data-a="doConfirm" style="' + (danger ? '' : 'min-height:68px;font-size:19px') + '">' + esc(okLabel) + '</button></div>');
+  confirmFn = fn;
+}
+var confirmFn = null;
+
+/* ============================ retours utilisateur ============================ */
+var toastTimer = null;
+function toast(msg, action, kind, ms) {
+  var t = $('toast'); $('toastMsg').textContent = msg;
+  t.className = 'toast on' + (kind ? ' ' + kind : '');
+  var b = $('toastBtn');
+  if (action) { b.hidden = false; b.textContent = action.label; b.onclick = function () { t.className = 'toast'; action.fn(); }; } else { b.hidden = true; b.onclick = null; }
+  clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = 'toast'; }, ms || (kind === 'err' ? 5000 : 3500));
+}
+function flash() { var f = $('flash'); f.className = 'flash'; void f.offsetWidth; f.className = 'flash go'; }
+var AC = null;
+function beep(ok) {
+  if (!S.cfg.son) return;
+  try {
+    var C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+    AC = AC || new C(); if (AC.state === 'suspended') AC.resume();
+    var o = AC.createOscillator(), g = AC.createGain();
+    o.type = 'sine'; o.frequency.value = ok ? 880 : 200; g.gain.value = 0.18;
+    o.connect(g); g.connect(AC.destination); o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + (ok ? 0.16 : 0.3)); o.stop(AC.currentTime + (ok ? 0.17 : 0.31));
+  } catch (e) { }
+}
+
+/* ============================ ecran allume ============================ */
+var wl = null;
+function wakeOn() {
+  if (!S.cfg.veille || !('wakeLock' in navigator) || wl) return;
+  try { navigator.wakeLock.request('screen').then(function (l) { wl = l; l.addEventListener('release', function () { wl = null; }); }).catch(function () { }); } catch (e) { }
+}
+function wakeOff() { if (wl) { try { wl.release(); } catch (e) { } wl = null; } }
+document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') wakeOn(); });
+
+/* ============================ commande vocale / texte ============================ */
+function strip(t) {
+  var s = String(t == null ? '' : t).toLowerCase();
+  if (s.normalize) s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return s.replace(/\u0153/g, 'oe');
+}
+var NUM = { zero: 0, un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10, onze: 11, douze: 12 };
+var LETTER = { be: 'B', bee: 'B', ce: 'C', se: 'C', de: 'D', dee: 'D', ef: 'F', effe: 'F', ge: 'G', ash: 'H', ach: 'H', hache: 'H', ji: 'J', ka: 'K', el: 'L', elle: 'L', em: 'M', emme: 'M', en: 'N', enne: 'N', pe: 'P', ku: 'Q', cu: 'Q', er: 'R', erre: 'R', es: 'S', esse: 'S', te: 'T', ve: 'V', ix: 'X', iks: 'X', igrec: 'Y', zed: 'Z' };
+function numTok(t) { if (/^\d{1,2}$/.test(t)) return +t; return Object.prototype.hasOwnProperty.call(NUM, t) ? NUM[t] : null; }
+function isEtage(t) { return /^(etages?|niveaux?)$/.test(t); }
+function isDyn(t) { return /^dynamiques?$/.test(t); }
+function isPal(t) { return /^pal+et+es?$/.test(t) || /^palet+es?$/.test(t) || t === 'pallets' || t === 'pallet'; }
+function isCmdSave(t) { return /^(valider|valide|validez|enregistrer|enregistre|enregistrez|suivant|suivante|termine)$/.test(t); }
+function isCmdUndo(t) { return /^(annuler|annule|supprimer|supprime|efface|effacer)$/.test(t); }
+function isKw(t) { return isEtage(t) || isDyn(t) || isPal(t) || isCmdSave(t) || isCmdUndo(t) || t === 'adresse' || t === 'adresses'; }
+
+function addrFromTokens(tk) {
+  var out = '', i = 0;
+  while (i < tk.length) {
+    var t = tk[i];
+    if (t === 'double' && i + 1 < tk.length) {
+      var nx = tk[i + 1], c = (nx.length === 1 && /[a-z]/.test(nx)) ? nx.toUpperCase() : LETTER[nx];
+      if (c) { out += c + c; i += 2; continue; }
+      if (nx === 've') { out += 'W'; i += 2; continue; }
+    }
+    if (/^[a-z]$/.test(t)) { out += t.toUpperCase(); i++; continue; }
+    if (/^\d+$/.test(t)) { out += t; i++; continue; }
+    var n = Object.prototype.hasOwnProperty.call(NUM, t) ? NUM[t] : null;
+    if (n !== null) { out += String(n); i++; continue; }
+    if (LETTER[t]) { out += LETTER[t]; i++; continue; }
+    if (/^[a-z0-9]+$/.test(t)) { out += t.toUpperCase(); i++; continue; }
+    i++;
+  }
+  return out;
+}
+
+/* Fonction pure : texte -> intentions. Testable sans interface. */
+function parseCommande(texte) {
+  var tk = strip(texte).replace(/[,.;:!?'’"«»()\-]/g, ' ').split(/\s+/).filter(Boolean);
+  var res = { adresse: null, niveaux: null, dyn: null, palettes: null, save: false, undo: false, notes: [], vu: false };
+  var used = {}, i, n;
+  function numBefore(k) { return (k > 0 && !used[k - 1] && numTok(tk[k - 1]) !== null) ? k - 1 : -1; }
+  function numAfter(k) { return (k + 1 < tk.length && !used[k + 1] && numTok(tk[k + 1]) !== null) ? k + 1 : -1; }
+  /* adresse */
+  for (i = 0; i < tk.length; i++) {
+    if (tk[i] === 'adresse' || tk[i] === 'adresses') {
+      var j = i + 1, part = [];
+      while (j < tk.length && !isKw(tk[j])) {
+        if (numTok(tk[j]) !== null && j + 1 < tk.length && (isEtage(tk[j + 1]) || isDyn(tk[j + 1]) || isPal(tk[j + 1]))) break;
+        part.push(tk[j]); j++;
+      }
+      for (var u = i; u < j; u++) used[u] = true;
+      var a = normAddr(addrFromTokens(part));
+      if (a) { res.adresse = a; res.vu = true; }
+      i = j - 1;
+    }
+  }
+  var hasKw = false;
+  for (i = 0; i < tk.length; i++) {
+    if (used[i]) continue;
+    var t = tk[i], k;
+    if (isEtage(t)) {
+      hasKw = true; k = numBefore(i); if (k < 0) k = numAfter(i);
+      if (k >= 0) { used[k] = used[i] = true; n = numTok(tk[k]); if (n >= 1 && n <= NIV_MAX) { res.niveaux = n; res.vu = true; } else res.notes.push(n + ' étages : valeur improbable'); }
+    } else if (isDyn(t)) {
+      hasKw = true;
+      var neg = (i > 0 && /^(sans|aucun|aucune|pas)$/.test(tk[i - 1])) || (i > 1 && tk[i - 1] === 'de' && tk[i - 2] === 'pas');
+      if (neg) { res.dyn = 0; res.vu = true; used[i] = true; }
+      else {
+        k = numBefore(i); if (k < 0) k = numAfter(i);
+        if (k >= 0) { used[k] = used[i] = true; res.dyn = numTok(tk[k]); res.vu = true; }
+      }
+    } else if (isPal(t)) {
+      hasKw = true; k = numBefore(i); if (k < 0) k = numAfter(i);
+      if (k >= 0) {
+        used[k] = used[i] = true; n = numTok(tk[k]);
+        if (n >= 2 && n <= 4) { res.palettes = n; res.vu = true; } else res.notes.push('format ' + n + ' palettes non prévu (2, 3 ou 4)');
+      }
+    } else if (isCmdSave(t)) { res.save = true; res.vu = true; used[i] = true; hasKw = true; }
+    else if (isCmdUndo(t)) {
+      /* "annuler" seul = annuler le dernier enregistrement */
+      res.undo = true; res.vu = true; used[i] = true; hasKw = true;
+    }
+  }
+  /* raccourci : trois nombres seuls = etages, dynamiques, palettes */
+  if (!hasKw && res.adresse === null) {
+    var nums = tk.filter(function (t) { return numTok(t) !== null; });
+    var onlyNums = tk.filter(function (t) { return numTok(t) === null && !/^(et|virgule|puis)$/.test(t); }).length === 0;
+    if (onlyNums && nums.length === 3) {
+      var a1 = numTok(nums[0]), b1 = numTok(nums[1]), c1 = numTok(nums[2]);
+      if (a1 >= 1 && a1 <= NIV_MAX && b1 >= 0 && b1 <= a1 && c1 >= 2 && c1 <= 4) { res.niveaux = a1; res.dyn = b1; res.palettes = c1; res.vu = true; }
+      else res.notes.push('trois chiffres : étages, dynamiques, palettes (ex. « six zéro trois »)');
+    }
+  }
+  return res;
+}
+function applyCommande(texte, final) {
+  var r = parseCommande(texte), f = S.form, did = [];
+  if (!r.vu) { return { ok: false, msg: 'Pas compris : « ' + texte + ' ». Dites par ex. « six étages, deux dynamiques, trois palettes ».' }; }
+  if (r.undo && final !== false) {
+    if (undoSnap) { undoLast(); return { ok: true, msg: 'Dernier enregistrement annulé' }; }
+    return { ok: false, msg: 'Rien à annuler' };
+  }
+  if (r.adresse) { gotoAddress(r.adresse, true); did.push('adresse ' + r.adresse); }
+  if (r.niveaux != null) { f.niveaux = r.niveaux; dynConsistent(); did.push(r.niveaux + ' étages'); }
+  if (r.dyn != null) {
+    if (f.niveaux == null && r.niveaux == null) { r.notes.push('indiquez d’abord les étages'); }
+    else {
+      var d = r.dyn; if (d > f.niveaux) { r.notes.push('dynamiques (' + d + ') > étages (' + f.niveaux + ') : ramené à ' + f.niveaux); d = f.niveaux; }
+      f.dyn = d; dynConsistent(); did.push(d + ' dynamique' + (d > 1 ? 's' : ''));
+    }
+  }
+  if (r.palettes != null) { f.palettes = r.palettes; did.push(r.palettes + ' palettes'); }
+  persist(); refreshSaisie();
+  var msg = did.length ? 'Compris : ' + did.join(' · ') : '';
+  if (r.notes.length) msg += (msg ? ' — ' : '') + r.notes.join(' ; ');
+  if (r.save && final !== false) { var okSave = save(); return { ok: okSave, msg: okSave ? null : msg }; }
+  return { ok: did.length > 0, msg: msg || 'Pas compris' };
+}
+
+/* --- reconnaissance vocale (si le navigateur la fournit) --- */
+var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+var rec = null, listening = false, wantListen = false, errCount = 0;
+function micUI() { var b = $('micBtn'); b.className = 'mic' + (listening ? ' on' : ''); }
+function stopVoice() { wantListen = false; if (rec) { try { rec.stop(); } catch (e) { } } listening = false; micUI(); }
+function startVoice() {
+  if (!SR) return;
+  try {
+    rec = new SR(); rec.lang = 'fr-FR'; rec.interimResults = true; rec.maxAlternatives = 3; rec.continuous = false;
+    rec.onstart = function () { listening = true; micUI(); toast('J’écoute… dites par ex. « six étages, deux dynamiques, trois palettes »', null, null, 6000); };
+    rec.onresult = function (ev) {
+      var res = ev.results[ev.results.length - 1];
+      if (!res.isFinal) { $('toastMsg').textContent = '« ' + res[0].transcript + ' »'; return; }
+      errCount = 0;
+      var chosen = null, i;
+      for (i = 0; i < res.length; i++) { if (parseCommande(res[i].transcript).vu) { chosen = res[i].transcript; break; } }
+      var out = applyCommande(chosen || res[0].transcript, true);
+      if (out.msg) toast(out.msg, null, out.ok ? 'good' : 'err', 5000);
+    };
+    rec.onerror = function (ev) {
+      var e = ev && ev.error; errCount++;
+      if (e === 'not-allowed' || e === 'service-not-allowed') { wantListen = false; toast('Micro refusé. Réglages iPhone › Safari › Micro, ou utilisez le micro du clavier dans « Dictée ».', null, 'err', 7000); }
+      else if (e === 'network') { wantListen = false; toast('Pas de réseau pour la dictée. Utilisez les boutons, ou le micro du clavier.', null, 'err', 6000); }
+      else if (e === 'no-speech') { /* silence : on ignore */ }
+      else if (e !== 'aborted') { toast('Dictée indisponible (' + e + '). Utilisez le micro du clavier.', null, 'err', 6000); wantListen = false; }
+    };
+    rec.onend = function () {
+      listening = false; micUI();
+      if (wantListen && S.cfg.continu && errCount < 4) setTimeout(function () { if (wantListen) startVoice(); }, 350);
+      else wantListen = false;
+    };
+    rec.start();
+  } catch (e) { listening = false; micUI(); toast('Dictée indisponible sur ce navigateur. Utilisez le micro du clavier.', null, 'err', 6000); }
+}
+function toggleVoice() {
+  if (listening) { stopVoice(); return; }
+  wantListen = true; errCount = 0; startVoice();
+}
+
+/* ============================ evenements ============================ */
+var dictTimer = null;
+document.addEventListener('click', function (ev) {
+  var el = ev.target.closest ? ev.target.closest('[data-a]') : null; if (!el) return;
+  var a = el.getAttribute('data-a'), f = S.form;
+  switch (a) {
+    case 'tab': setTab(el.getAttribute('data-v')); break;
+    case 'chambre': sheetChambre(); break;
+    case 'pickCh': closeSheet(); selectChambre(el.getAttribute('data-c')); break;
+    case 'addCh': {
+      var nm = ($('newCh').value || '').replace(/\s+/g, ' ').trim();
+      if (!nm) { $('newCh').focus(); break; }
+      var ex = S.chambres.filter(function (c) { return c.toLowerCase() === nm.toLowerCase(); })[0];
+      closeSheet(); selectChambre(ex || nm); break;
+    }
+    case 'closeSheet': closeSheet(); break;
+    case 'doConfirm': { var fn = confirmFn; confirmFn = null; closeSheet(); if (fn) fn(); break; }
+    case 'step': {
+      var d = +el.getAttribute('data-d'), fld = el.getAttribute('data-f');
+      if (fld === 'niv') setNiveaux(f.niveaux == null ? 6 : f.niveaux + d);
+      else { if (f.niveaux == null) { toast("Indiquez d'abord le nombre d'étages", null, 'err'); break; } setDyn(f.dyn + d); }
+      break;
+    }
+    case 'pal': setPalettes(+el.getAttribute('data-v')); break;
+    case 'prevAddr': case 'nextAddr': {
+      var cur = normAddr($('adresse').value || f.adresse), dir = a === 'nextAddr' ? 1 : -1;
+      var nb = cur ? neighbor(f.chambre, cur, dir) : (dir > 0 ? (expectedOf(f.chambre)[0] || '') : '');
+      if (!nb) { toast(dir > 0 ? 'Pas d’adresse suivante' : 'Pas d’adresse précédente', null, 'err'); break; }
+      gotoAddress(nb, true); break;
+    }
+    case 'save': save(); break;
+    case 'mic': toggleVoice(); break;
+    case 'listeCh': f.chambre = el.getAttribute('data-c'); f.editingId = null; f.remarque = ''; setFormValues(carry()); f.adresse = suggestNext(f.chambre, ''); { var rr = f.adresse ? findRack(f.chambre, f.adresse) : null; if (rr) loadFromRack(rr); } persist(); refreshSaisie(); renderListe(); break;
+    case 'openRack': gotoAddress(el.getAttribute('data-ad'), true); setTab('saisie'); break;
+    case 'delAsk': { var did = el.getAttribute('data-id'); var rk = S.racks.filter(function (r) { return r.id === did; })[0]; if (rk) confirmBox('Supprimer le rack ' + rk.adresse + ' ?', 'Oui, supprimer', function () { deleteRack(did); }, true); break; }
+    case 'cfg': { var k = el.getAttribute('data-k'); S.cfg[k] = !S.cfg[k]; persist(); renderRegl(); if (k === 'veille') { if (S.cfg.veille) wakeOn(); else wakeOff(); } if (k === 'son' && S.cfg.son) beep(true); break; }
+    case 'share': shareFiles(); break;
+    case 'dlJson': download(fileName() + '.json', buildJson(), 'application/json'); markExported(); break;
+    case 'dlCsv': download(fileName() + '.csv', buildCsv(), 'text/csv;charset=utf-8'); markExported(); break;
+    case 'copy': {
+      var txt = buildCsv().replace(/^﻿/, '').replace(/;/g, '\t');
+      var done = function () { markExported(); toast('Tableau copié : collez-le dans un mail', null, 'good'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(function () { toast('Copie refusée', null, 'err'); });
+      else { var ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { toast('Copie impossible', null, 'err'); } ta.remove(); }
+      break;
+    }
+    case 'wipeAsk':
+      confirmBox('Effacer tous les racks saisis sur ce téléphone ?', 'Oui, tout effacer', function () {
+        if (S.racks.length && (!S.lastExport || S.lastChange > S.lastExport)) {
+          confirmBox('Ces données n’ont pas été envoyées. Les effacer quand même ?', 'Oui, effacer sans envoyer', function () { wipe(); }, true);
+        } else wipe();
+      }, true); break;
+  }
+});
+function wipe() {
+  var d = defaults(); S.racks = []; S.chambres = d.chambres; S.form = d.form; S.last = null; S.lastExport = null; S.lastChange = 0; undoSnap = null;
+  S.form.adresse = suggestNext(S.form.chambre, '');
+  persist(); refreshSaisie(); renderListe(); renderEnvoi(); renderRegl(); toast('Données effacées');
+}
+$('mask').addEventListener('click', function (e) { if (e.target === $('mask')) closeSheet(); });
+document.addEventListener('change', function (e) {
+  if (e.target && e.target.id === 'impFile' && e.target.files && e.target.files[0]) { importFile(e.target.files[0]); e.target.value = ''; }
+});
+$('adresse').addEventListener('input', function () {
+  var v = normAddr(this.value), pos = this.selectionStart;
+  if (this.value !== v) { this.value = v; try { this.setSelectionRange(pos, pos); } catch (e) { } }
+  var f = S.form; f.adresse = v;
+  var r = v ? findRack(f.chambre, v) : null;
+  if (r) loadFromRack(r); else if (f.editingId) { f.editingId = null; }
+  persist(); refreshSaisie();
+});
+$('adresse').addEventListener('keydown', function (e) { if (e.key === 'Enter') { this.blur(); } });
+$('adresse').addEventListener('focus', function () { var el = this; setTimeout(function () { try { el.select(); } catch (e) { } }, 30); });
+$('adresse').addEventListener('blur', function () { refreshSaisie(); });
+$('remarque').addEventListener('input', function () { S.form.remarque = this.value; persist(); });
+function runDict(final) {
+  var el = $('dict'), v = el.value.trim(); if (!v) return;
+  var out = applyCommande(v, final);
+  if (final) { el.value = ''; if (out.msg) toast(out.msg, null, out.ok ? 'good' : 'err', 5000); }
+  else if (out.ok && out.msg) toast(out.msg, null, 'good', 2500);
+}
+$('dict').addEventListener('input', function () { clearTimeout(dictTimer); dictTimer = setTimeout(function () { runDict(false); }, 1100); });
+$('dict').addEventListener('change', function () { clearTimeout(dictTimer); runDict(true); });
+$('dict').addEventListener('keydown', function (e) { if (e.key === 'Enter') { clearTimeout(dictTimer); runDict(true); this.blur(); } });
+
+/* ============================ theme ============================ */
+/* (suit le reglage clair/sombre de l'iPhone) */
+
+/* ============================ demarrage ============================ */
+if (!S.form.adresse) S.form.adresse = suggestNext(S.form.chambre, '');
+if (S.form.adresse) { var r0 = findRack(S.form.chambre, S.form.adresse); if (r0 && !S.form.editingId) loadFromRack(r0); }
+if (SR) $('micBtn').hidden = false;
+refreshSaisie(); renderListe(); renderEnvoi(); renderRegl(); wakeOn();
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () { }); });
+}
+if (navigator.storage && navigator.storage.persist) { try { navigator.storage.persist(); } catch (e) { } }
+
+window.__RC = { parseCommande: parseCommande, patternStep: patternStep, suggestNext: suggestNext, neighbor: neighbor, S: function () { return S; }, save: save, buildJson: buildJson, buildCsv: buildCsv, applyCommande: applyCommande, setTab: setTab };
+})();
+</script>
+</body>
+</html>
