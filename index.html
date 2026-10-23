@@ -254,7 +254,7 @@ ol.how li{margin:6px 0}
 
       <div class="dictwrap">
         <input id="dict" class="in" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="go"
-               placeholder="Dictée : « rack A039A six étages deux dynamiques trois palettes »" aria-label="Dictée ou commande écrite">
+               placeholder="Dictée : « rack A53 six étages deux dynamiques trois palettes »" aria-label="Dictée ou commande écrite">
       </div>
 
       <details class="rem" id="remDet">
@@ -313,14 +313,15 @@ function fmtDate(iso) {
   return pad(d.getDate(), 2) + '/' + pad(d.getMonth() + 1, 2) + '/' + d.getFullYear() + ' ' + pad(d.getHours(), 2) + ':' + pad(d.getMinutes(), 2);
 }
 function stamp() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1, 2) + '-' + pad(d.getDate(), 2); }
-function normAddr(s) { return String(s == null ? '' : s).toUpperCase().replace(/[\s ]+/g, ''); }
+/* adresse normalisee : majuscules, sans espaces, sans zeros inutiles (A053 -> A53) */
+function normAddr(s) { return String(s == null ? '' : s).toUpperCase().replace(/[\s\u00a0.\-]+/g, '').replace(/\d+/g, function (d) { return String(parseInt(d, 10)); }); }
 
 /* ============================ etat ============================ */
 function defaults() {
   var ch = Object.keys(EXPECTED);
   return {
     v: 2, chambres: ch.slice(), racks: [],
-    cfg: { reprise: true, son: true, veille: true, continu: true, auto: true },
+    cfg: { reprise: true, son: true, veille: true, continu: true, auto: true, parle: true },
     form: { chambre: ch[0] || '', adresse: '', niveaux: null, dyn: 0, dynLevels: [], palettes: null, remarque: '', editingId: null },
     last: null, lastExport: null, lastChange: 0
   };
@@ -340,6 +341,12 @@ function load() {
         if (o.form) for (var f in o.form) d.form[f] = o.form[f];
         d.last = o.last || null; d.lastExport = o.lastExport || null; d.lastChange = o.lastChange || 0;
 if (!(o.v >= 2)) { d.cfg.continu = true; d.cfg.auto = true; }
+        /* v5 : adresses sans zeros inutiles (A053 -> A53), doublons fusionnes (le plus recent garde) */
+        var vus = {};
+        d.racks.forEach(function (r) { r.adresse = normAddr(r.adresse); });
+        d.racks.forEach(function (r) { var k = r.chambre + '|' + r.adresse; if (!vus[k] || (vus[k].modifieLe || '') < (r.modifieLe || '')) vus[k] = r; });
+        d.racks = d.racks.filter(function (r) { return vus[r.chambre + '|' + r.adresse] === r; });
+        d.form.adresse = normAddr(d.form.adresse);
       }
     }
   } catch (e) { }
@@ -391,6 +398,7 @@ function neighbor(ch, addr, dir) {
   return patternStep(addr, dir);
 }
 function suggestNext(ch, from) {
+  if (!expectedOf(ch).length) { var pr = predictNext(ch); if (pr) return pr.addr; }
   var list = expectedOf(ch), i = list.indexOf(from), k, a;
   if (i >= 0) {
     for (k = 1; k <= list.length; k++) { a = list[(i + k) % list.length]; if (!findRack(ch, a)) return a; }
@@ -519,7 +527,7 @@ function refreshSaisie() {
   var tag = $('addrTag');
   if (!f.adresse) { tag.className = 'tag'; tag.textContent = ''; }
   else if (f.editingId) { tag.className = 'tag edit'; tag.textContent = 'Déjà saisi — vous le modifiez'; }
-  else { tag.className = 'tag nouv'; tag.textContent = 'Nouveau rack'; }
+  else { var prd = predictNext(f.chambre); tag.className = 'tag nouv'; tag.textContent = (prd && prd.addr === f.adresse) ? ('Proposé' + (prd.rule ? ' · ' + prd.rule : '')) : 'Nouveau rack'; }
   var nv = $('niv-val'); nv.firstChild.textContent = f.niveaux == null ? '—' : f.niveaux; nv.className = f.niveaux == null ? 'vide' : '';
   var dv = $('dyn-val'); dv.firstChild.textContent = f.dyn; dv.className = 'dyn' + (f.dyn > 0 ? ' has' : '');
   $('dynTiles').innerHTML = (f.niveaux != null && f.dyn > 0)
@@ -685,7 +693,8 @@ function opt(k, t, d) { return '<div class="opt"><div class="tx"><b>' + t + '</b
 function renderRegl() {
   var h = '<div class="card"><h2>Confort</h2>' +
     opt('reprise', 'Reprendre les valeurs du rack précédent', 'Étages, dynamiques et format restent affichés : vous ne touchez que ce qui change.') +
-    opt('son', 'Bip à l’enregistrement', 'Un bip court confirme chaque rack, sans regarder l’écran. (Le mode silencieux de l’iPhone peut le couper.)') +
+    opt('son', 'Signal sonore fort', 'Trois notes montantes = rack enregistré, on passe au suivant. Deux bips = question. Son grave = erreur. (Coupé si l’iPhone est en mode silencieux.)') +
+    opt('parle', 'L’appli pose ses questions à voix haute', 'Si elle n’est pas sûre d’avoir compris, elle le dit et vous demande de répéter (ou de dire « oui »).') +
     opt('veille', 'Garder l’écran allumé', ('wakeLock' in navigator) ? 'Évite que l’iPhone se verrouille entre deux racks.' : 'Non disponible sur cette version d’iOS : réglez la mise en veille dans Réglages > Luminosité et affichage.') +
     opt('auto', 'Enregistrer tout seul à la voix', 'Une phrase complète (adresse, étages, dynamiques, palettes) enregistre le rack sans toucher l’écran. Si l’adresse est douteuse, rien n’est enregistré.') +
 opt('continu', 'Écoute vocale continue', 'Le micro se relance tout seul après chaque phrase (si votre iPhone le permet).') + '</div>';
@@ -694,12 +703,13 @@ opt('continu', 'Écoute vocale continue', 'Le micro se relance tout seul après 
     '<li>L’adresse du prochain rack est déjà proposée. Corrigez-la au besoin (flèches <b>‹ ›</b> ou en touchant l’adresse).</li>' +
     '<li>Réglez <b>étages</b>, <b>dynamiques</b> et <b>format</b>, puis <b>ENREGISTRER</b>. L’adresse suivante s’affiche aussitôt.</li>' +
     '<li>Les valeurs du rack précédent sont reprises : si le rack suivant est identique, un seul geste suffit.</li>' +
-    '<li><b>À la voix</b> : touchez le micro une seule fois, puis dites tout d’un trait en commençant par l’adresse : « rack A 039 A, six étages, deux dynamiques, trois palettes ». Tout ce qui est dit avant les valeurs devient l’adresse (« à » = A, « zéro trente-neuf » = 039), quel que soit le format. Le rack est enregistré tout seul (bip) et le micro écoute le suivant. Plus court : « rack A 039 A, six, deux, trois ». « Annuler » efface le dernier.</li>' +
-    '<li><b>Supprimer un rack</b> : onglet <b>Liste</b>, corbeille rouge sur sa ligne ; ou ouvrez le rack et touchez « Supprimer ce rack » ; ou dites « supprimer rack A 039 A ». Le bouton « Annuler » le récupère pendant quelques secondes.</li>' +
+    '<li><b>À la voix</b> : touchez le micro une fois et dites tout d’un trait : « rack A 53, six étages, deux dynamiques, trois palettes ». Les zéros inutiles sont retirés (A053 → A53). Trois notes montantes = rack enregistré. En cas de doute, l’appli fait deux bips et vous pose la question à voix haute : répondez (« trois », « oui ») ou répétez. « Rack suivant, six étages… » utilise l’adresse proposée.</li>' +
+    '<li><b>Logique de numérotation</b> : l’appli repère la récurrence des derniers racks saisis (ex. A50, A51, A54, A55 → A58, A59) et propose l’adresse suivante en conséquence.</li>' +
+    '<li><b>Supprimer un rack</b> : onglet <b>Liste</b>, corbeille rouge sur sa ligne ; ou ouvrez le rack et touchez « Supprimer ce rack » ; ou dites « supprimer rack A 53 ». Le bouton « Annuler » le récupère pendant quelques secondes.</li>' +
 '<li>En fin de chambre : onglet <b>Envoyer</b>.</li></ol></div>';
   h += '<div class="card"><h2>Dictée vocale</h2><div class="small muted">Si le bouton micro ne fonctionne pas (ou n’apparaît pas), activez la dictée du clavier : <b>Réglages iPhone › Général › Clavier › Activer la dictée</b>, puis touchez le micro du clavier dans le champ « Dictée ». Dans une chambre sans réseau, la dictée peut ne pas marcher : les boutons restent utilisables.</div></div>';
   h += '<button type="button" class="btn dng" data-a="wipeAsk">Effacer toutes les données de ce téléphone</button>';
-  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 4 · données enregistrées sur ce téléphone uniquement</div>';
+  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 5 · données enregistrées sur ce téléphone uniquement</div>';
   $('v-regl').innerHTML = h;
 }
 
@@ -731,15 +741,25 @@ function toast(msg, action, kind, ms) {
 }
 function flash() { var f = $('flash'); f.className = 'flash'; void f.offsetWidth; f.className = 'flash go'; }
 var AC = null;
-function beep(ok) {
+/* signal sonore : fort et distinct ; ok = rack enregistre, false = erreur, 'ask' = question */
+function beep(kind) {
   if (!S.cfg.son) return;
   try {
     var C = window.AudioContext || window.webkitAudioContext; if (!C) return;
     AC = AC || new C(); if (AC.state === 'suspended') AC.resume();
-    var o = AC.createOscillator(), g = AC.createGain();
-    o.type = 'sine'; o.frequency.value = ok ? 880 : 200; g.gain.value = 0.18;
-    o.connect(g); g.connect(AC.destination); o.start();
-    g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + (ok ? 0.16 : 0.3)); o.stop(AC.currentTime + (ok ? 0.17 : 0.31));
+    var t0 = AC.currentTime + 0.02, comp = AC.createDynamicsCompressor(), master = AC.createGain();
+    master.gain.value = 1; comp.connect(master); master.connect(AC.destination);
+    function note(freq, at, dur, type, vol) {
+      var o = AC.createOscillator(), g = AC.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + 0.012);
+      g.gain.setValueAtTime(vol, at + dur - 0.05); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      o.connect(g); g.connect(comp); o.start(at); o.stop(at + dur + 0.02);
+    }
+    if (kind === 'ask') { note(660, t0, 0.14, 'square', 0.5); note(660, t0 + 0.2, 0.14, 'square', 0.5); }
+    else if (kind) { note(784, t0, 0.13, 'square', 0.6); note(1047, t0 + 0.13, 0.13, 'square', 0.6); note(1568, t0 + 0.26, 0.32, 'square', 0.7); }
+    else { note(300, t0, 0.22, 'sawtooth', 0.6); note(200, t0 + 0.24, 0.35, 'sawtooth', 0.6); }
+    if (navigator.vibrate) navigator.vibrate(kind && kind !== 'ask' ? [90, 50, 90] : [250]);
   } catch (e) { }
 }
 
@@ -767,212 +787,349 @@ function isNumWord(t) { return has(NUM, t) && t !== 'set' && t !== 'cet'; }
 function isEtage(t) { return /^(etages?|niveaux?|etageres?)$/.test(t); }
 function isDyn(t) { return /^(dynamiques?|dynamics?|dyna|dynas)$/.test(t); }
 function isPal(t) { return /^pal+et+es?$/.test(t) || /^palet+es?$/.test(t) || t === 'pallets' || t === 'pallet'; }
-function isCmdSave(t) { return /^(valider|valide|validez|enregistrer|enregistre|enregistrez|suivant|suivante|termine|ok|okay)$/.test(t); }
+function isCmdSave(t) { return /^(valider|valide|validez|enregistrer|enregistre|enregistrez|termine|ok|okay|oui|ouais|exact|exactement|correct|confirme|confirmer)$/.test(t); }
 function isCmdUndo(t) { return /^(annuler|annule|supprimer|supprime|efface|effacer)$/.test(t); }
 function isKw(t) { return isEtage(t) || isDyn(t) || isPal(t) || isCmdSave(t) || isCmdUndo(t); }
 var SKIP = /^(adresse|adresses|rack|racks|raque|raques|rac|rak|rake|le|la|l|emplacement|allee|position|alors|euh|bon|donc|numero|du)$/;
 var FILLER = /^(et|tiret|euh|numero|le|la|l)$/;
+/* lettres qui se ressemblent a l'oral */
+var SON = ['BDPTVEGCW', 'AHK', 'MN', 'FS', 'IY'];
+function sonProche(x, y) { for (var q = 0; q < SON.length; q++) if (SON[q].indexOf(x) >= 0 && SON[q].indexOf(y) >= 0) return true; return false; }
 
 /* "zero trente neuf" -> "039" ; "cent douze" -> "112" ; "un deux" -> "12" */
 function numRun(run) {
-var out = '', cur = null, prev = '';
-function flush() { if (cur !== null) { out += String(cur); cur = null; } }
-run.forEach(function (w) {
-var v = NUM[w];
-if (w === 'zero') { flush(); out += '0'; }
-else if (v === 100) { cur = (cur !== null && cur < 10 ? cur : 1) * 100; }
-else if (w.indexOf('vingt') === 0 && prev === 'quatre' && cur === 4) { cur = 80; }
-else if (cur === null) { cur = v; }
-else if (cur >= 100 && cur % 100 === 0 && v < 100) { cur += v; }
-else if (cur >= 20 && cur % 10 === 0 && v < 20) { cur += v; }
-else { flush(); cur = v; }
-prev = w;
-});
-flush(); return out;
+  var out = '', cur = null, prev = '';
+  function flush() { if (cur !== null) { out += String(cur); cur = null; } }
+  run.forEach(function (w) {
+    var v = NUM[w];
+    if (w === 'zero') { flush(); out += '0'; }
+    else if (v === 100) { cur = (cur !== null && cur < 10 ? cur : 1) * 100; }
+    else if (w.indexOf('vingt') === 0 && prev === 'quatre' && cur === 4) { cur = 80; }
+    else if (cur === null) { cur = v; }
+    else if (cur >= 100 && cur % 100 === 0 && v < 100) { cur += v; }
+    else if (cur >= 20 && cur % 10 === 0 && v < 20) { cur += v; }
+    else { flush(); cur = v; }
+    prev = w;
+  });
+  flush(); return out;
 }
 function letterOf(t) { if (/^[a-z]$/.test(t)) return t.toUpperCase(); return has(LETTER, t) ? LETTER[t] : ''; }
-/* Transforme les mots entendus en adresse, quel que soit le format (A039A, AA01B, C7...) */
+/* Transforme les mots entendus en adresse, quel que soit le format */
 function zoneToAddr(toks) {
-var out = '', unk = [], i = 0;
-while (i < toks.length) {
-var t = toks[i];
-if (t === 'double' && i + 1 < toks.length) {
-var c = letterOf(toks[i + 1]);
-if (c) { out += c + c; i += 2; continue; }
-if (/^v/.test(toks[i + 1])) { out += 'W'; i += 2; continue; }
-}
-if (/^\d+$/.test(t)) { out += t; i++; continue; }
-if (isNumWord(t)) { var run = []; while (i < toks.length && isNumWord(toks[i])) { run.push(toks[i]); i++; } out += numRun(run); continue; }
-if (/^[a-z0-9]+$/.test(t) && /\d/.test(t)) { out += t.toUpperCase(); i++; continue; }
-var L = letterOf(t); if (L) { out += L; i++; continue; }
-if (FILLER.test(t)) { i++; continue; }
-unk.push(t); i++;
-}
-return { addr: out, unk: unk };
-}
-/* Meme nombre de chiffres que les racks deja saisis de la chambre (A39A -> A039A si on a deja A040A) */
-function padLike(addr, list) {
-var m = /^([A-Z]+)(\d+)([A-Z]*)$/.exec(addr); if (!m || !list || !list.length) return addr;
-var cnt = {}, best = 0, w = 0;
-list.forEach(function (a) { var k = /^([A-Z]+)(\d+)([A-Z]*)$/.exec(a); if (k && k[1].length === m[1].length && k[3].length === m[3].length) { cnt[k[2].length] = (cnt[k[2].length] || 0) + 1; } });
-for (var L in cnt) if (cnt[L] > best) { best = cnt[L]; w = +L; }
-if (w > m[2].length) return m[1] + pad(m[2], w) + m[3];
-return addr;
+  var out = '', unk = [], i = 0;
+  while (i < toks.length) {
+    var t = toks[i];
+    if (t === 'double' && i + 1 < toks.length) {
+      var c = letterOf(toks[i + 1]);
+      if (c) { out += c + c; i += 2; continue; }
+      if (/^v/.test(toks[i + 1])) { out += 'W'; i += 2; continue; }
+    }
+    if (/^\d+$/.test(t)) { out += t; i++; continue; }
+    if (isNumWord(t)) {
+      var run = [];
+      while (i < toks.length && (isNumWord(toks[i]) || (toks[i] === 'et' && run.length && i + 1 < toks.length && /^(un|une|onze)$/.test(toks[i + 1])))) { if (toks[i] !== 'et') run.push(toks[i]); i++; }
+      out += numRun(run); continue;
+    }
+    if (/^[a-z0-9]+$/.test(t) && /\d/.test(t)) { out += t.toUpperCase(); i++; continue; }
+    var L = letterOf(t); if (L) { out += L; i++; continue; }
+    if (FILLER.test(t)) { i++; continue; }
+    unk.push(t); i++;
+  }
+  return { addr: out, unk: unk };
 }
 
-/* Fonction pure : texte -> intentions. ctx = { known: [adresses deja saisies dans la chambre] } */
+/* ---------- logique de numerotation (A50, A51, A54, A55, A58... -> A59) ---------- */
+function splitAddr(a) { var m = /^([A-Z]*)(\d+)([A-Z]*)$/.exec(a || ''); return m ? { pre: m[1], num: +m[2], suf: m[3] } : null; }
+function joinAddr(s) { return s.pre + s.num + s.suf; }
+function seqOf(ch) {
+  return racksOf(ch).slice().sort(function (a, b) { return a.saisiLe < b.saisiLe ? -1 : (a.saisiLe > b.saisiLe ? 1 : 0); }).map(function (r) { return r.adresse; });
+}
+/* Cherche un motif qui se repete dans les ecarts entre les derniers racks saisis, et l'applique. */
+function predictNext(ch) {
+  var rs = seqOf(ch); if (!rs.length) return null;
+  var last = splitAddr(rs[rs.length - 1]); if (!last) return null;
+  var seq = [], i, p, j;
+  for (i = rs.length - 1; i >= 0 && seq.length < 16; i--) {
+    var s = splitAddr(rs[i]);
+    if (!s || s.pre !== last.pre || s.suf.length !== last.suf.length) break;
+    seq.unshift(s);
+  }
+  var keys = [];
+  for (i = 1; i < seq.length; i++) keys.push({ d: seq[i].num - seq[i - 1].num, suf: seq[i].suf });
+  function eq(a, b) { return a.d === b.d && a.suf === b.suf; }
+  var period = 0;
+  for (p = 1; p <= 4 && !period; p++) {
+    var L = Math.min(keys.length, 3 * p); if (L < p + 1) continue;
+    var ok = true;
+    for (j = keys.length - L + p; j < keys.length; j++) if (!eq(keys[j], keys[j - p])) { ok = false; break; }
+    if (ok) period = p;
+  }
+  function keyAt(g) { return keys[keys.length - period + (g % period)]; }
+  var rule = '';
+  if (period) {
+    var parts = [];
+    for (i = 0; i < period; i++) { var k = keyAt(i); parts.push((k.d > 0 ? '+' : '') + k.d + (k.suf && k.d === 0 ? ' ' + k.suf : '')); }
+    rule = 'logique ' + parts.join(' / ');
+  }
+  var cur = { pre: last.pre, num: last.num, suf: last.suf };
+  for (var g = 0; g < 40; g++) {
+    if (period) { var kk = keyAt(g); cur = { pre: cur.pre, num: cur.num + kk.d, suf: kk.suf }; }
+    else { var sp = splitAddr(patternStep(joinAddr(cur), 1)); if (!sp) return null; cur = sp; }
+    if (cur.num < 0) return null;
+    var a = joinAddr(cur);
+    if (!findRack(ch, a)) return { addr: a, rule: rule };
+  }
+  return null;
+}
+function lastAddr(ch) { var rs = seqOf(ch); return rs.length ? rs[rs.length - 1] : ''; }
+/* adresse lisible a voix haute : "A53B" -> "A 53 B" */
+function dire(a) { return String(a || '').replace(/([A-Z])(?=\d)/g, '$1 ').replace(/(\d)(?=[A-Z])/g, '$1 '); }
+
+/* Fonction pure : texte -> intentions.
+   ctx = { predicted: adresse attendue, prefix: lettres du dernier rack, current: adresse affichee } */
 function parseCommande(texte, ctx) {
-ctx = ctx || {};
-var tk = strip(texte).replace(/[,.;:!?'’"«»()\/\-]/g, ' ').split(/\s+/).filter(Boolean);
-var res = { adresse: null, addr: null, niveaux: null, dyn: null, palettes: null, save: false, undo: false, del: false, notes: [], bad: false, vu: false, addrMiss: '' };
-var used = {}, i, n;
-function numBefore(k) { return (k > 0 && !used[k - 1] && numTok(tk[k - 1]) !== null) ? k - 1 : -1; }
-function numAfter(k) { return (k + 1 < tk.length && !used[k + 1] && numTok(tk[k + 1]) !== null) ? k + 1 : -1; }
-function valStart(k) { return isKw(tk[k]) || (numTok(tk[k]) !== null && k + 1 < tk.length && (isKw(tk[k + 1]) || tk[k + 1] === 'de' && k + 2 < tk.length && isKw(tk[k + 2]))); }
-var s0 = 0; while (s0 < tk.length && SKIP.test(tk[s0])) s0++;
-if (s0 < tk.length && /^(supprimer|supprime|supprimez|efface|effacer|effacez)$/.test(tk[s0])) { res.del = true; used[s0] = true; s0++; while (s0 < tk.length && SKIP.test(tk[s0])) s0++; }
-/* zone adresse : du debut jusqu'aux valeurs */
-var e = s0; while (e < tk.length && !valStart(e)) e++;
-var anyKw = tk.some(function (t, k) { return k >= s0 && isKw(t); });
-if (!anyKw && e - s0 >= 4) {
-/* forme courte "A039A six deux trois" : les 3 derniers nombres sont les valeurs */
-var last3 = tk.slice(e - 3, e);
-if (last3.every(function (t) { return numTok(t) !== null; })) e -= 3;
+  ctx = ctx || {};
+  var tk = strip(texte).replace(/[,.;:!?'’"«»()\/\-]/g, ' ').split(/\s+/).filter(Boolean);
+  var res = { adresse: null, addr: null, niveaux: null, dyn: null, palettes: null, save: false, undo: false, del: false, notes: [], bad: false, vu: false, addrMiss: '', nTok: tk.length };
+  var used = {}, i, n;
+  function numBefore(k) { return (k > 0 && !used[k - 1] && numTok(tk[k - 1]) !== null) ? k - 1 : -1; }
+  function numAfter(k) { return (k + 1 < tk.length && !used[k + 1] && numTok(tk[k + 1]) !== null) ? k + 1 : -1; }
+  function valStart(k) { return isKw(tk[k]) || (numTok(tk[k]) !== null && k + 1 < tk.length && (isKw(tk[k + 1]) || tk[k + 1] === 'de' && k + 2 < tk.length && isKw(tk[k + 2]))); }
+  var s0 = 0; while (s0 < tk.length && SKIP.test(tk[s0])) s0++;
+  if (s0 < tk.length && /^(supprimer|supprime|supprimez|efface|effacer|effacez)$/.test(tk[s0])) { res.del = true; used[s0] = true; s0++; while (s0 < tk.length && SKIP.test(tk[s0])) s0++; }
+  /* un nombre seul ("trois") = reponse a une question, pas une adresse (sauf apres "rack") */
+  if (tk.length - s0 === 1 && numTok(tk[s0]) !== null && s0 === 0 && ctx.pending !== 'adresse') { res.lone = numTok(tk[s0]); res.reste = []; return res; }
+  var e = s0;
+  if (s0 < tk.length && /^(suivant|suivante|prochain)$/.test(tk[s0]) && (ctx.predicted || ctx.current)) {
+    /* "rack suivant, 6 etages..." : l'adresse proposee */
+    var pa = ctx.predicted || ctx.current;
+    used[s0] = true; e = s0 + 1;
+    res.addr = { addr: pa, heard: 'suivant', sure: true, why: 'suivant', unk: [] }; res.adresse = pa; res.vu = true;
+  } else {
+    /* zone adresse : du debut jusqu'aux valeurs */
+    while (e < tk.length && !valStart(e)) e++;
+    var anyKw = tk.some(function (t, k) { return k >= s0 && isKw(t); });
+    if (!anyKw && e - s0 >= 4) {
+      /* forme courte "A53 six deux trois" : les 3 derniers nombres sont les valeurs */
+      var last3 = tk.slice(e - 3, e);
+      if (last3.every(function (t) { return numTok(t) !== null; })) e -= 3;
+    }
+    if (e > s0) {
+      var z = zoneToAddr(tk.slice(s0, e));
+      var a = normAddr(z.addr), why = z.unk.length ? 'mots' : '', sure = !z.unk.length;
+      if (a && /^\d+[A-Z]*$/.test(a) && ctx.prefix) {
+        /* lettre perdue ("53" au lieu de "A53") : on reprend les lettres du rack precedent */
+        a = ctx.prefix + a; why = 'prefixe'; sure = sure && a === ctx.predicted;
+      }
+      if (a && /[A-Z]/.test(a) && /\d/.test(a) && a.length <= 12) {
+        if (ctx.predicted && a !== ctx.predicted && a.length === ctx.predicted.length) {
+          /* une seule lettre differente et de son proche (D/B, T/B...) : on suit la logique */
+          var dif = 0, pos = -1;
+          for (i = 0; i < a.length; i++) if (a.charAt(i) !== ctx.predicted.charAt(i)) { dif++; pos = i; }
+          if (dif === 1 && /[A-Z]/.test(a.charAt(pos)) && sonProche(a.charAt(pos), ctx.predicted.charAt(pos))) { why = 'corrige'; res.heardAddr = a; a = ctx.predicted; }
+        }
+        res.addr = { addr: a, heard: z.addr, sure: sure, why: why, unk: z.unk };
+        res.adresse = a; res.vu = true;
+      } else res.addrMiss = tk.slice(s0, e).join(' ');
+      for (i = 0; i < e; i++) used[i] = true;
+    }
+  }
+  var hasKw = false;
+  function deuxAvant(k) { return k > 0 && !used[k - 1] && tk[k - 1] === 'de' && !(k > 1 && /^(pas|plus)$/.test(tk[k - 2])) ? k - 1 : -1; }
+  for (i = 0; i < tk.length; i++) {
+    if (used[i]) continue;
+    var t = tk[i], k;
+    if (isEtage(t)) {
+      hasKw = true; k = numBefore(i); if (k < 0) k = numAfter(i);
+      if (k >= 0) { used[k] = used[i] = true; n = numTok(tk[k]); if (n >= 1 && n <= NIV_MAX) { res.niveaux = n; res.vu = true; } else { res.notes.push(n + ' étages : valeur improbable'); res.bad = true; } }
+    } else if (isDyn(t)) {
+      hasKw = true;
+      var neg = (i > 0 && /^(sans|aucun|aucune|pas)$/.test(tk[i - 1])) || (i > 1 && tk[i - 1] === 'de' && /^(pas|plus)$/.test(tk[i - 2]));
+      if (neg) { res.dyn = 0; res.vu = true; used[i] = true; }
+      else if ((k = deuxAvant(i)) >= 0) { used[k] = used[i] = true; res.dyn = 2; res.vu = true; }
+      else { k = numBefore(i); if (k < 0) k = numAfter(i); if (k >= 0) { used[k] = used[i] = true; res.dyn = numTok(tk[k]); res.vu = true; } }
+    } else if (isPal(t)) {
+      hasKw = true; k = numBefore(i);
+      if (k < 0 && (k = deuxAvant(i)) >= 0) { used[k] = used[i] = true; res.palettes = 2; res.vu = true; }
+      else if (k >= 0 || (k = numAfter(i)) >= 0) {
+        used[k] = used[i] = true; n = numTok(tk[k]);
+        if (n >= 2 && n <= 4) { res.palettes = n; res.vu = true; } else { res.notes.push('format ' + n + ' palettes non prévu (2, 3 ou 4)'); res.bad = true; }
+      }
+    } else if (isCmdSave(t)) { res.save = true; res.vu = true; used[i] = true; hasKw = true; }
+    else if (isCmdUndo(t)) { res.undo = true; res.vu = true; used[i] = true; hasKw = true; }
+  }
+  /* raccourci : trois nombres seuls (apres l'adresse) = etages, dynamiques, palettes */
+  var rest = []; for (i = 0; i < tk.length; i++) if (!used[i] && !/^(et|virgule|puis|tiret)$/.test(tk[i])) rest.push(tk[i]);
+  if (!hasKw && rest.length === 3 && rest.every(function (t) { return numTok(t) !== null; })) {
+    var a1 = numTok(rest[0]), b1 = numTok(rest[1]), c1 = numTok(rest[2]);
+    if (a1 >= 1 && a1 <= NIV_MAX && b1 >= 0 && b1 <= a1 && c1 >= 2 && c1 <= 4) { res.niveaux = a1; res.dyn = b1; res.palettes = c1; res.vu = true; rest = []; }
+    else { res.notes.push('trois chiffres : étages, dynamiques, palettes'); res.bad = true; }
+  }
+  /* reponse courte a une question : un seul nombre */
+  if (rest.length === 1 && numTok(rest[0]) !== null && !res.addr) res.lone = numTok(rest[0]);
+  res.reste = rest.filter(function (t) { return numTok(t) === null && !/^(de|des|d|je|il|y|a|en|ai|avec|dont|plus)$/.test(t); });
+  return res;
 }
-if (e > s0) {
-var z = zoneToAddr(tk.slice(s0, e));
-for (i = 0; i < e; i++) used[i] = true;
-var a = z.addr;
-if (a && /[A-Z]/.test(a) && /\d/.test(a) && a.length <= 12) {
-var p = padLike(a, ctx.known);
-res.addr = { addr: p, heard: a, sure: !z.unk.length, why: z.unk.length ? 'mots' : (p !== a ? 'complete' : ''), unk: z.unk };
-res.adresse = p; res.vu = true;
-} else res.addrMiss = tk.slice(s0, e).join(' ');
+function scoreParse(r, ctx) {
+  return (r.addr ? (r.addr.sure ? 4 : 1) : 0) + (ctx && r.adresse && r.adresse === ctx.predicted ? 3 : 0) +
+    (r.niveaux != null ? 1 : 0) + (r.dyn != null ? 1 : 0) + (r.palettes != null ? 1 : 0) + (r.save ? 1 : 0) - (r.bad ? 2 : 0) - (r.addrMiss ? 2 : 0);
 }
-var hasKw = false;
-function deuxAvant(k) { return k > 0 && !used[k - 1] && tk[k - 1] === 'de' && !(k > 1 && /^(pas|plus)$/.test(tk[k - 2])) ? k - 1 : -1; }
-for (i = 0; i < tk.length; i++) {
-if (used[i]) continue;
-var t = tk[i], k;
-if (isEtage(t)) {
-hasKw = true; k = numBefore(i); if (k < 0) k = numAfter(i);
-if (k >= 0) { used[k] = used[i] = true; n = numTok(tk[k]); if (n >= 1 && n <= NIV_MAX) { res.niveaux = n; res.vu = true; } else { res.notes.push(n + ' étages : valeur improbable'); res.bad = true; } }
-} else if (isDyn(t)) {
-hasKw = true;
-var neg = (i > 0 && /^(sans|aucun|aucune|pas)$/.test(tk[i - 1])) || (i > 1 && tk[i - 1] === 'de' && /^(pas|plus)$/.test(tk[i - 2]));
-if (neg) { res.dyn = 0; res.vu = true; used[i] = true; }
-else if ((k = deuxAvant(i)) >= 0) { used[k] = used[i] = true; res.dyn = 2; res.vu = true; }
-else { k = numBefore(i); if (k < 0) k = numAfter(i); if (k >= 0) { used[k] = used[i] = true; res.dyn = numTok(tk[k]); res.vu = true; } }
-} else if (isPal(t)) {
-hasKw = true; k = numBefore(i);
-if (k < 0 && (k = deuxAvant(i)) >= 0) { used[k] = used[i] = true; res.palettes = 2; res.vu = true; }
-else if (k >= 0 || (k = numAfter(i)) >= 0) {
-used[k] = used[i] = true; n = numTok(tk[k]);
-if (n >= 2 && n <= 4) { res.palettes = n; res.vu = true; } else { res.notes.push('format ' + n + ' palettes non prévu (2, 3 ou 4)'); res.bad = true; }
-}
-} else if (isCmdSave(t)) { res.save = true; res.vu = true; used[i] = true; hasKw = true; }
-else if (isCmdUndo(t)) { res.undo = true; res.vu = true; used[i] = true; hasKw = true; }
-}
-/* raccourci : trois nombres seuls (apres l'adresse) = etages, dynamiques, palettes */
-if (!hasKw) {
-var rest = []; for (i = 0; i < tk.length; i++) if (!used[i] && !/^(et|virgule|puis|tiret)$/.test(tk[i])) rest.push(tk[i]);
-if (rest.length === 3 && rest.every(function (t) { return numTok(t) !== null; })) {
-var a1 = numTok(rest[0]), b1 = numTok(rest[1]), c1 = numTok(rest[2]);
-if (a1 >= 1 && a1 <= NIV_MAX && b1 >= 0 && b1 <= a1 && c1 >= 2 && c1 <= 4) { res.niveaux = a1; res.dyn = b1; res.palettes = c1; res.vu = true; }
-else { res.notes.push('trois chiffres : étages, dynamiques, palettes (ex. « six, deux, trois »)'); res.bad = true; }
-}
-}
-return res;
-}
-function scoreParse(r) { return (r.addr ? (r.addr.sure ? 4 : 1) : 0) + (r.niveaux != null ? 1 : 0) + (r.dyn != null ? 1 : 0) + (r.palettes != null ? 1 : 0) + (r.save ? 1 : 0); }
 function knownOf(ch) { return racksOf(ch).map(function (r) { return r.adresse; }); }
+function voiceCtx() {
+  var f = S.form, pr = predictNext(f.chambre), la = splitAddr(lastAddr(f.chambre));
+  return { predicted: (!f.editingId && f.adresse) ? f.adresse : (pr ? pr.addr : ''), current: f.adresse, prefix: la ? la.pre : '', pending: pendingField };
+}
 
-var voiceAddr = null; /* adresse dictee et sure, en attente des valeurs manquantes */
-function applyCommande(texte, final) {
-var f = S.form, did = [], notes = [];
-var r = parseCommande(texte, { known: knownOf(f.chambre) });
-if (!r.vu && !r.addrMiss) return { ok: false, msg: 'Pas compris. Dites par ex. « rack A 039 A, six étages, deux dynamiques, trois palettes ».' };
-if (r.del) {
-if (final === false) return { ok: false, msg: '' };
-var A0 = r.addr;
-if (!A0) { if (undoSnap) { undoLast(); voiceAddr = null; return { ok: true, msg: 'Dernier enregistrement annulé' }; } return { ok: false, msg: 'Dites « supprimer » puis l’adresse, ex. « supprimer rack A 039 A »' }; }
-if (!A0.sure) return { ok: false, msg: 'Adresse douteuse (' + A0.addr + ') : rien n’est supprimé' };
-var rk = findRack(f.chambre, A0.addr);
-if (!rk) return { ok: false, msg: A0.addr + ' n’est pas saisi dans ' + f.chambre + ' : rien à supprimer' };
-deleteRack(rk.id); voiceAddr = null; return { ok: true, msg: null };
+var voiceAddr = null;      /* adresse dictee et sure, en attente des valeurs manquantes */
+var pendingField = null;   /* question posee a voix haute : 'adresse' | 'niveaux' | 'palettes' | 'confirmer' */
+function applyCommande(texte, final, meta) {
+  meta = meta || {};
+  var f = S.form, did = [], notes = [], ask = null, needConfirm = false;
+  var r = parseCommande(texte, voiceCtx());
+  /* reponse a une question : "trois" */
+  if (r.lone != null && pendingField && final !== false) {
+    if (pendingField === 'palettes') { if (r.lone >= 2 && r.lone <= 4) r.palettes = r.lone; else { r.bad = true; r.notes.push('format ' + r.lone + ' non prévu'); } }
+    else if (pendingField === 'niveaux') { if (r.lone >= 1 && r.lone <= NIV_MAX) r.niveaux = r.lone; else r.bad = true; }
+    r.vu = true;
+  }
+  if (!r.vu && !r.addrMiss) {
+    return { ok: false, msg: 'Pas compris. Dites par ex. « rack A 53, six étages, deux dynamiques, trois palettes ».', ask: 'Je n’ai pas compris. Répétez, s’il vous plaît.' };
+  }
+  if (r.del) {
+    if (final === false) return { ok: false, msg: '' };
+    var A0 = r.addr;
+    if (!A0) { if (undoSnap) { undoLast(); voiceAddr = null; pendingField = null; return { ok: true, msg: 'Dernier enregistrement annulé', say: 'Annulé' }; } return { ok: false, msg: 'Dites « supprimer » puis l’adresse', ask: 'Quel rack faut-il supprimer ?' }; }
+    if (!A0.sure) return { ok: false, msg: 'Adresse douteuse (' + A0.addr + ') : rien n’est supprimé', ask: 'Je n’ai pas bien compris l’adresse. Répétez.' };
+    var rk = findRack(f.chambre, A0.addr);
+    if (!rk) return { ok: false, msg: A0.addr + ' n’est pas saisi dans ' + f.chambre + ' : rien à supprimer', ask: 'Le rack ' + dire(A0.addr) + ' n’est pas enregistré.' };
+    deleteRack(rk.id); voiceAddr = null; pendingField = null; return { ok: true, msg: null, say: dire(A0.addr) + ' supprimé' };
+  }
+  if (r.undo && final !== false) {
+    pendingField = null;
+    if (undoSnap) { undoLast(); voiceAddr = null; return { ok: true, msg: 'Dernier enregistrement annulé', say: 'Annulé' }; }
+    return { ok: false, msg: 'Rien à annuler' };
+  }
+  if (r.addrMiss && !r.save) return { ok: false, msg: 'Adresse pas comprise (« ' + r.addrMiss + ' ») : rien n’est enregistré, répétez.', ask: 'Je n’ai pas compris l’adresse. Répétez.' };
+  var A = r.addr, keep = null;
+  if (A) {
+    keep = pendingField === 'adresse' ? { niveaux: f.niveaux, dyn: f.dyn, palettes: f.palettes } : null;
+    gotoAddress(A.addr, true);
+    if (!f.editingId && pendingField !== 'adresse') { f.niveaux = null; f.dyn = 0; f.dynLevels = []; f.palettes = null; f.remarque = ''; }
+    else if (!f.editingId && pendingField === 'adresse' && keep) { f.niveaux = keep.niveaux; f.dyn = keep.dyn; f.palettes = keep.palettes; dynConsistent(); }
+    did.push(A.addr);
+    voiceAddr = A.addr;
+    if (!A.sure || meta.unsure) needConfirm = true;
+    if (A.why === 'mots') notes.push('mots non compris dans l’adresse : « ' + A.unk.join(' ') + ' »');
+    else if (A.why === 'prefixe') notes.push('lettre reprise du rack précédent');
+    else if (A.why === 'corrige') notes.push('entendu ' + r.heardAddr + ', corrigé en ' + A.addr + ' selon la logique');
+  } else if (meta.unsure && (r.niveaux != null || r.palettes != null)) needConfirm = true;
+  if (r.niveaux != null) { f.niveaux = r.niveaux; dynConsistent(); did.push(r.niveaux + ' étages'); }
+  if (r.dyn == null && A && f.niveaux != null && !f.editingId && !keep) r.dyn = 0;
+  if (r.dyn != null) {
+    if (f.niveaux == null) { notes.push('dynamiques sans étages'); }
+    else {
+      var d = r.dyn; if (d > f.niveaux) { notes.push(d + ' dynamiques > ' + f.niveaux + ' étages'); r.bad = true; d = f.niveaux; }
+      f.dyn = d; dynConsistent(); did.push(d + ' dyn.');
+    }
+  }
+  if (r.palettes != null) { f.palettes = r.palettes; did.push(r.palettes + ' pal.'); }
+  if (r.reste && r.reste.length && !A && !r.save) { needConfirm = true; notes.push('mots non compris : « ' + r.reste.join(' ') + ' »'); }
+  notes = notes.concat(r.notes);
+  persist(); refreshSaisie();
+  var valeurs = r.niveaux != null || r.dyn != null || r.palettes != null;
+  var addrOk = !!f.adresse && voiceAddr === f.adresse;
+  var complet = !validate();
+  if (final !== false) {
+    if (r.save && complet && f.adresse) {
+      var ok1 = save(); if (ok1) { voiceAddr = null; pendingField = null; } return { ok: ok1, msg: null };
+    }
+    if (S.cfg.auto && addrOk && complet && !r.bad && !needConfirm && (valeurs || (A && pendingField === 'adresse'))) {
+      var ok2 = save(); if (ok2) { voiceAddr = null; pendingField = null; } return { ok: ok2, msg: null };
+    }
+    /* sinon : on demande a voix haute */
+    if (r.bad) { ask = 'Valeur improbable. Répétez le rack complet.'; pendingField = null; }
+    else if (!f.adresse || (!addrOk && valeurs && !A)) { ask = 'Quel rack ?'; pendingField = 'adresse'; }
+    else if (f.niveaux == null) { ask = 'Combien d’étages ?'; pendingField = 'niveaux'; }
+    else if (f.palettes == null) { ask = 'Combien de palettes ?'; pendingField = 'palettes'; }
+    else if (needConfirm || !addrOk) {
+      ask = 'J’ai compris ' + dire(f.adresse) + ', ' + f.niveaux + ' étages, ' + f.dyn + ' dynamique' + (f.dyn > 1 ? 's' : '') + ', ' + f.palettes + ' palettes. Dites oui, ou répétez.';
+      pendingField = 'confirmer'; voiceAddr = null;
+    }
+    if (ask) notes.push(pendingField === 'confirmer' ? 'dites « oui » pour valider, ou répétez' : ask);
+  }
+  var msg = did.length ? did.join(' · ') : '';
+  if (notes.length) msg += (msg ? ' — ' : '') + notes.join(' ; ');
+  return { ok: did.length > 0 && !notes.length, msg: msg || 'Pas compris', ask: ask };
 }
-if (r.undo && final !== false) {
-if (undoSnap) { undoLast(); voiceAddr = null; return { ok: true, msg: 'Dernier enregistrement annulé' }; }
-return { ok: false, msg: 'Rien à annuler' };
-}
-if (r.addrMiss && !r.save) return { ok: false, msg: 'Adresse pas comprise (« ' + r.addrMiss + ' ») : il faut au moins une lettre et un chiffre. Rien n’est enregistré, répétez.' };
-var A = r.addr;
-if (A) {
-gotoAddress(A.addr, true);
-if (!f.editingId) { f.niveaux = null; f.dyn = 0; f.dynLevels = []; f.palettes = null; f.remarque = ''; }
-did.push(A.addr);
-voiceAddr = A.sure ? A.addr : null;
-if (A.why === 'mots') notes.push('mots non compris dans l’adresse : « ' + A.unk.join(' ') + ' » — vérifiez l’adresse');
-else if (A.why === 'complete') notes.push('entendu ' + A.heard + ', complété en ' + A.addr);
-}
-if (r.niveaux != null) { f.niveaux = r.niveaux; dynConsistent(); did.push(r.niveaux + ' étages'); }
-if (r.dyn == null && A && f.niveaux != null && !f.editingId) r.dyn = 0;
-if (r.dyn != null) {
-if (f.niveaux == null) { notes.push('dynamiques sans étages'); }
-else {
-var d = r.dyn; if (d > f.niveaux) { notes.push(d + ' dynamiques > ' + f.niveaux + ' étages : ramené à ' + f.niveaux); d = f.niveaux; r.bad = true; }
-f.dyn = d; dynConsistent(); did.push(d + ' dyn.');
-}
-}
-if (r.palettes != null) { f.palettes = r.palettes; did.push(r.palettes + ' pal.'); }
-notes = notes.concat(r.notes);
-persist(); refreshSaisie();
-var addrOk = !!f.adresse && voiceAddr === f.adresse;
-var complet = !validate();
-var manque = [];
-if (f.niveaux == null) manque.push('étages'); if (f.palettes == null) manque.push('palettes');
-if (final !== false) {
-if (r.save || (S.cfg.auto && addrOk && complet && !r.bad && (r.niveaux != null || r.dyn != null || r.palettes != null))) {
-var okSave = save(); if (okSave) voiceAddr = null; return { ok: okSave, msg: null };
-}
-if (manque.length && f.adresse) notes.push('il manque : ' + manque.join(', '));
-if (!addrOk && complet && did.length) notes.push('vérifiez puis ENREGISTRER (ou dites « valider »)');
-}
-var msg = did.length ? did.join(' · ') : '';
-if (notes.length) msg += (msg ? ' — ' : '') + notes.join(' ; ');
-return { ok: did.length > 0 && !notes.length, msg: msg || 'Pas compris' };
+
+/* --- voix de l'appli (questions) --- */
+var speaking = false;
+function say(txt, cb) {
+  if (!S.cfg.parle || !('speechSynthesis' in window) || !txt) { if (cb) cb(); return; }
+  var done = false;
+  function fin() { if (done) return; done = true; speaking = false; if (cb) cb(); }
+  try {
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(txt); u.lang = 'fr-FR'; u.rate = 1.08; u.volume = 1;
+    u.onend = fin; u.onerror = fin; speaking = true;
+    setTimeout(fin, 1500 + txt.length * 90);
+    window.speechSynthesis.speak(u);
+  } catch (e) { fin(); }
 }
 
 /* --- reconnaissance vocale (si le navigateur la fournit) --- */
 var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-var rec = null, listening = false, wantListen = false, errCount = 0;
+var rec = null, listening = false, wantListen = false, errCount = 0, encoreUne = false;
 function micUI() { var b = $('micBtn'); b.className = 'mic' + (listening ? ' on' : ''); }
-function stopVoice() { wantListen = false; if (rec) { try { rec.stop(); } catch (e) { } } listening = false; micUI(); }
+function stopVoice() { wantListen = false; encoreUne = false; if (rec) { try { rec.stop(); } catch (e) { } } listening = false; micUI(); }
+function relancer() {
+  var n = 0;
+  (function attendre() {
+    if (!wantListen || listening) return;
+    if (speaking && n++ < 60) { setTimeout(attendre, 150); return; }
+    setTimeout(function () { if (wantListen && !listening) startVoice(); }, 300);
+  })();
+}
+function demander(txt) {
+  beep('ask');
+  encoreUne = true;
+  if (rec && listening) { try { rec.stop(); } catch (e) { } }
+  setTimeout(function () { say(txt); }, 450);
+}
 function startVoice() {
   if (!SR) return;
   try {
-    rec = new SR(); rec.lang = 'fr-FR'; rec.interimResults = true; rec.maxAlternatives = 3; rec.continuous = false;
-    rec.onstart = function () { listening = true; micUI(); toast('J’écoute… « rack A 039 A, six étages, deux dynamiques, trois palettes »', null, null, 6000); };
+    rec = new SR(); rec.lang = 'fr-FR'; rec.interimResults = true; rec.maxAlternatives = 5; rec.continuous = false;
+    rec.onstart = function () { listening = true; micUI(); if (!pendingField && !/\bon\b/.test($('toast').className)) toast('J’écoute… « rack A 53, six étages, deux dynamiques, trois palettes »', null, null, 4000); };
     rec.onresult = function (ev) {
       var res = ev.results[ev.results.length - 1];
       if (!res.isFinal) { $('toastMsg').textContent = '« ' + res[0].transcript + ' »'; return; }
       errCount = 0;
-      var chosen = null, i;
-      var bestS = -1; for (i = 0; i < res.length; i++) { var sc = scoreParse(parseCommande(res[i].transcript, { known: knownOf(S.form.chambre) })); if (sc > bestS) { bestS = sc; chosen = res[i].transcript; } }
-      var heard = chosen || res[0].transcript;
-      var out = applyCommande(heard, true);
-      if (out.msg) toast('« ' + heard + ' » → ' + out.msg, null, out.ok ? 'good' : 'err', 8000);
+      var ctx = voiceCtx(), cands = [], i;
+      for (i = 0; i < res.length; i++) { var p = parseCommande(res[i].transcript, ctx); cands.push({ t: res[i].transcript, p: p, s: scoreParse(p, ctx), c: res[i].confidence || 0 }); }
+      cands.sort(function (a, b) { return b.s - a.s; });
+      var best = cands[0], unsure = false;
+      /* les hypotheses du telephone ne sont pas d'accord sur l'adresse : on fait confirmer */
+      for (i = 1; i < cands.length; i++) {
+        var o = cands[i];
+        if (o.s >= best.s - 1 && o.p.adresse && best.p.adresse && o.p.adresse !== best.p.adresse && best.p.adresse !== ctx.predicted) unsure = true;
+      }
+      if (best.c > 0 && best.c < 0.35) unsure = true;
+      var out = applyCommande(best.t, true, { unsure: unsure });
+      if (out.msg) toast('« ' + best.t + ' » → ' + out.msg, null, out.ok ? 'good' : 'err', 9000);
+      if (out.ask) demander(out.ask);
+      else if (out.say) say(out.say);
     };
     rec.onerror = function (ev) {
       var e = ev && ev.error; errCount++;
       if (e === 'not-allowed' || e === 'service-not-allowed') { wantListen = false; toast('Micro refusé. Réglages iPhone › Safari › Micro, ou utilisez le micro du clavier dans « Dictée ».', null, 'err', 7000); }
       else if (e === 'network') { wantListen = false; toast('Pas de réseau pour la dictée. Utilisez les boutons, ou le micro du clavier.', null, 'err', 6000); }
-      else if (e === 'no-speech') { errCount--; /* silence : on ignore */ }
+      else if (e === 'no-speech') { errCount--; }
       else if (e !== 'aborted') { toast('Dictée indisponible (' + e + '). Utilisez le micro du clavier.', null, 'err', 6000); wantListen = false; }
     };
     rec.onend = function () {
       listening = false; micUI();
-      if (wantListen && S.cfg.continu && errCount < 4) setTimeout(function () { if (wantListen) startVoice(); }, 350);
+      if (wantListen && (S.cfg.continu || encoreUne) && errCount < 4) { encoreUne = false; relancer(); }
       else wantListen = false;
     };
     rec.start();
@@ -980,6 +1137,9 @@ function startVoice() {
 }
 function toggleVoice() {
   if (listening) { stopVoice(); return; }
+  /* le toucher du micro debloque le son et la voix sur iPhone */
+  try { var C = window.AudioContext || window.webkitAudioContext; if (C) { AC = AC || new C(); if (AC.state === 'suspended') AC.resume(); } } catch (e) { }
+  try { if ('speechSynthesis' in window) { var u = new SpeechSynthesisUtterance(' '); u.volume = 0; window.speechSynthesis.speak(u); } } catch (e) { }
   wantListen = true; errCount = 0; startVoice();
 }
 

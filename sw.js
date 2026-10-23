@@ -1,5 +1,5 @@
 /* Recensement des racks : derniere version si reseau, copie locale sinon (chambre froide) */
-var CACHE = 'recensement-racks-v4';
+var CACHE = 'recensement-racks-v5';
 var FICHIERS = ['./', 'index.html', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', function (e) {
 e.waitUntil(caches.open(CACHE).then(function (c) {
