@@ -204,6 +204,12 @@ ol.how li{margin:6px 0}
 .addrow .btn{width:auto;min-width:110px;margin:0}
 .trash{width:52px;height:46px;border-radius:12px;background:var(--nok-bg);color:var(--nok);display:grid;place-items:center;margin-left:auto}
 #delBtn{margin-top:4px}
+.selrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;min-height:64px;padding:8px 2px;border-top:1px solid var(--line)}
+.selrow:first-of-type{border-top:0}
+.selrow .cb{flex:none;width:34px;height:34px;border-radius:10px;border:2px solid var(--line);background:var(--bg);display:grid;place-items:center;color:var(--on-brand)}
+.selrow .cb.on{background:var(--brand);border-color:var(--brand)}
+.selrow .tx{flex:1;min-width:0}.selrow .tx b{display:block;font-size:18px}.selrow .tx span{font-size:14px;color:var(--muted)}
+.selrow .tx span.warn{color:var(--warn)}.selrow .tx span.ok{color:var(--ok)}
 </style>
 </head>
 <body>
@@ -323,7 +329,7 @@ function defaults() {
     v: 2, chambres: ch.slice(), racks: [],
     cfg: { reprise: true, son: true, veille: true, continu: true, auto: true, parle: true },
     form: { chambre: ch[0] || '', adresse: '', niveaux: null, dyn: 0, dynLevels: [], palettes: null, remarque: '', editingId: null },
-    last: null, lastExport: null, lastChange: 0
+    last: null, lastExport: null, lastChange: 0, exportCh: {}, changeCh: {}, envoiSel: null
   };
 }
 var S = load();
@@ -340,6 +346,9 @@ function load() {
         if (o.cfg) for (var k in o.cfg) d.cfg[k] = o.cfg[k];
         if (o.form) for (var f in o.form) d.form[f] = o.form[f];
         d.last = o.last || null; d.lastExport = o.lastExport || null; d.lastChange = o.lastChange || 0;
+        d.exportCh = o.exportCh || {}; d.changeCh = o.changeCh || {}; d.envoiSel = Array.isArray(o.envoiSel) ? o.envoiSel : null;
+        /* v6 : suivi des envois chambre par chambre (reprise de l'ancien suivi global) */
+        if (!o.exportCh && o.lastExport) d.chambres.forEach(function (c) { d.exportCh[c] = o.lastExport; d.changeCh[c] = o.lastChange || 0; });
 if (!(o.v >= 2)) { d.cfg.continu = true; d.cfg.auto = true; }
         /* v5 : adresses sans zeros inutiles (A053 -> A53), doublons fusionnes (le plus recent garde) */
         var vus = {};
@@ -357,7 +366,11 @@ function persist() {
   catch (e) { storageOk = false; }
   updateBadge();
 }
-function touchChange() { S.lastChange = Date.now(); persist(); }
+function touchChange(ch) {
+  var n = Date.now(); S.lastChange = n; S.changeCh = S.changeCh || {};
+  (Array.isArray(ch) ? ch : [ch || S.form.chambre]).forEach(function (c) { if (c) S.changeCh[c] = n; });
+  persist();
+}
 
 /* ============================ racks ============================ */
 function findRack(ch, addr) {
@@ -493,7 +506,7 @@ function save() {
   f.editingId = null; f.remarque = ''; f.adresse = next;
   var nr = next ? findRack(f.chambre, next) : null;
   if (nr) loadFromRack(nr); else setFormValues(carry());
-  touchChange(); refreshSaisie(); renderListe(); renderEnvoi();
+  touchChange(rec.chambre); refreshSaisie(); renderListe(); renderEnvoi();
   beep(true); flash();
   var p = progressOf(rec.chambre);
   var msg = rec.adresse + ' enregistré · ' + rec.niveaux + ' étages · ' + rec.dynamiques + ' dyn. · ' + rec.palettes + ' pal.';
@@ -514,8 +527,8 @@ function deleteRack(id) {
   if (i < 0) return;
   var r = S.racks[i]; S.racks.splice(i, 1);
   if (S.form.editingId === id) { S.form.editingId = null; }
-  touchChange(); refreshSaisie(); renderListe(); renderEnvoi();
-  toast(r.adresse + ' supprimé', { label: 'Annuler', fn: function () { if (S.racks.some(function (x) { return x.id === r.id; })) return; S.racks.splice(Math.min(i, S.racks.length), 0, r); if (S.form.chambre === r.chambre && S.form.adresse === r.adresse) loadFromRack(r); touchChange(); refreshSaisie(); renderListe(); renderEnvoi(); toast(r.adresse + ' rétabli', null, 'good'); } }, null, 8000);
+  touchChange(r.chambre); refreshSaisie(); renderListe(); renderEnvoi();
+  toast(r.adresse + ' supprimé', { label: 'Annuler', fn: function () { if (S.racks.some(function (x) { return x.id === r.id; })) return; S.racks.splice(Math.min(i, S.racks.length), 0, r); if (S.form.chambre === r.chambre && S.form.adresse === r.adresse) loadFromRack(r); touchChange(r.chambre); refreshSaisie(); renderListe(); renderEnvoi(); toast(r.adresse + ' rétabli', null, 'good'); } }, null, 8000);
 }
 
 /* ============================ rendu "Saisie" ============================ */
@@ -546,8 +559,7 @@ var db = $('delBtn'); if (db) { db.hidden = !f.editingId; $('delLbl').textConten
 }
 function updateBadge() {
   var b = $('badgeEnvoi'); if (!b) return;
-  var n = S.racks.length, pend = n > 0 && (!S.lastExport || S.lastChange > S.lastExport);
-  b.hidden = !pend;
+  b.hidden = !S.chambres.some(pendingCh);
 }
 
 /* ============================ onglets ============================ */
@@ -596,51 +608,85 @@ function renderListe() {
 
 /* ============================ export ============================ */
 function chambreOrder() { return S.chambres.slice(); }
-function sortedRacks() {
+/* ---------- choix des chambres a envoyer ---------- */
+function avecRacks() { return S.chambres.filter(function (c) { return racksOf(c).length; }); }
+function pendingCh(c) {
+  var ex = (S.exportCh || {})[c], ch = (S.changeCh || {})[c] || 0;
+  return racksOf(c).length > 0 && (!ex || ch > ex);
+}
+function selChambres() {
+  var w = avecRacks();
+  if (!Array.isArray(S.envoiSel)) return w;
+  return S.envoiSel.filter(function (c) { return w.indexOf(c) >= 0; });
+}
+function sortedRacks(sel) {
   var order = chambreOrder();
-  return S.racks.slice().sort(function (a, b) {
+  return S.racks.filter(function (r) { return !sel || sel.indexOf(r.chambre) >= 0; }).sort(function (a, b) {
     var ca = order.indexOf(a.chambre), cb = order.indexOf(b.chambre); if (ca !== cb) return ca - cb;
     var ea = expectedOf(a.chambre).indexOf(a.adresse), eb = expectedOf(b.chambre).indexOf(b.adresse);
     if (ea >= 0 && eb >= 0 && ea !== eb) return ea - eb;
     if ((ea >= 0) !== (eb >= 0)) return ea >= 0 ? -1 : 1;
+    var sa = splitAddr(a.adresse), sb = splitAddr(b.adresse);
+    if (sa && sb && sa.pre === sb.pre && sa.num !== sb.num) return sa.num - sb.num;
     return a.adresse < b.adresse ? -1 : (a.adresse > b.adresse ? 1 : 0);
   });
 }
-function buildJson() {
-  var rs = sortedRacks().map(function (r) {
+function buildJson(sel) {
+  sel = sel || selChambres();
+  var rs = sortedRacks(sel).map(function (r) {
     return { chambre: r.chambre, adresse: r.adresse, niveaux: r.niveaux, dynamiques: r.dynamiques, niveauxDynamiques: allLevels(r.dynamiques), palettes: r.palettes, remarque: r.remarque || '', saisiLe: r.saisiLe, modifieLe: r.modifieLe, id: r.id };
   });
-  return JSON.stringify({ application: 'Recensement-racks', version: 1, exporteLe: nowIso(), chambres: chambreOrder(), nbRacks: rs.length, racks: rs }, null, 1);
+  var w = avecRacks();
+  return JSON.stringify({
+    application: 'Recensement-racks', version: 2, exporteLe: nowIso(),
+    perimetre: sel.length >= w.length ? 'complet' : 'partiel',
+    chambres: sel,
+    chambresNonIncluses: w.filter(function (c) { return sel.indexOf(c) < 0; }),
+    consigneImport: 'Ce fichier ne contient que les chambres listées dans "chambres". Les racks des autres chambres ne doivent être ni modifiés ni supprimés.',
+    nbRacks: rs.length, racks: rs
+  }, null, 1);
 }
 function csvCell(v) { v = String(v == null ? '' : v); return /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
-function buildCsv() {
+function buildCsv(sel) {
+  sel = sel || selChambres();
   var L = ['Chambre;Adresse;Nb etages;Nb etages dynamiques;Niveaux dynamiques (depuis le sol);Format (palettes);Remarque;Saisi le'];
-  sortedRacks().forEach(function (r) {
+  sortedRacks(sel).forEach(function (r) {
     L.push([r.chambre, r.adresse, r.niveaux, r.dynamiques, r.dynamiques ? (r.dynamiques === 1 ? '1' : '1 a ' + r.dynamiques) : '', r.palettes, r.remarque || '', fmtDate(r.saisiLe)].map(csvCell).join(';'));
   });
   return '﻿' + L.join('\r\n') + '\r\n';
 }
-function fileName() { return 'Recensement-racks_' + stamp(); }
+function slug(s) { return String(s).normalize ? String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') : String(s).replace(/[^A-Za-z0-9]+/g, '-'); }
+function fileName(sel) {
+  sel = sel || selChambres();
+  var part = sel.length >= avecRacks().length ? 'toutes-chambres' : sel.map(slug).join('_');
+  return 'Recensement-racks_' + part + '_' + stamp();
+}
 function download(name, text, type) {
   var blob = new Blob([text], { type: type });
   var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click();
   setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
 }
-function markExported() { S.lastExport = Date.now(); persist(); renderEnvoi(); }
+function markExported(sel) {
+  var n = Date.now(); S.lastExport = n; S.exportCh = S.exportCh || {};
+  (sel || selChambres()).forEach(function (c) { S.exportCh[c] = n; });
+  persist(); renderEnvoi();
+}
 function shareFiles() {
-  if (!S.racks.length) { toast('Rien à envoyer : aucun rack saisi', null, 'err'); return; }
-  var n = fileName(), js = buildJson(), cs = buildCsv();
+  var sel = selChambres(), nb = sortedRacks(sel).length;
+  if (!nb) { toast('Rien à envoyer : cochez au moins une chambre qui contient des racks', null, 'err'); return; }
+  var n = fileName(sel), js = buildJson(sel), cs = buildCsv(sel);
   var files = [new File([js], n + '.json', { type: 'application/json' }), new File([cs], n + '.csv', { type: 'text/csv' })];
-  var data = { files: files, title: 'Recensement des racks', text: 'Recensement des racks du ' + stamp() + ' — ' + S.racks.length + ' racks' };
+  var data = { files: files, title: 'Recensement des racks', text: 'Recensement des racks du ' + stamp() + ' — ' + sel.join(', ') + ' — ' + nb + ' racks' };
+  var fait = function () { markExported(sel); };
   if (navigator.canShare && navigator.share && navigator.canShare(data)) {
-    navigator.share(data).then(markExported).catch(function (e) {
+    navigator.share(data).then(fait).catch(function (e) {
       if (e && e.name === 'AbortError') return;
-      download(n + '.json', js, 'application/json'); markExported();
+      download(n + '.json', js, 'application/json'); fait();
       toast('Partage impossible : fichier téléchargé à la place', null, 'err');
     });
   } else {
-    download(n + '.json', js, 'application/json'); markExported();
+    download(n + '.json', js, 'application/json'); fait();
     toast('Fichier téléchargé (app Fichiers, dossier Téléchargements)');
   }
 }
@@ -649,9 +695,10 @@ function importFile(file) {
   rd.onload = function () {
     try {
       var o = JSON.parse(String(rd.result)); if (!o || !Array.isArray(o.racks)) throw new Error('format');
-      var add = 0, upd = 0;
+      var add = 0, upd = 0, touches = [];
       o.racks.forEach(function (r) {
         if (!r || !r.chambre || !r.adresse) return;
+        if (touches.indexOf(r.chambre) < 0) touches.push(r.chambre);
         r.adresse = normAddr(r.adresse);
         if (S.chambres.indexOf(r.chambre) < 0) S.chambres.push(r.chambre);
         var ex = findRack(r.chambre, r.adresse);
@@ -660,30 +707,47 @@ function importFile(file) {
         if (ex) { if ((rec.modifieLe || '') > (ex.modifieLe || '')) { S.racks[S.racks.indexOf(ex)] = rec; upd++; } }
         else { S.racks.push(rec); add++; }
       });
-      touchChange(); refreshSaisie(); renderListe(); renderEnvoi();
-      toast(add + ' rack(s) ajouté(s), ' + upd + ' mis à jour', null, 'good');
+      touchChange(touches); refreshSaisie(); renderListe(); renderEnvoi();
+      toast(add + ' rack(s) ajouté(s), ' + upd + ' mis à jour — les autres chambres ne sont pas touchées', null, 'good');
     } catch (e) { toast('Fichier illisible : ce n’est pas un export de cette application', null, 'err'); }
   };
   rd.readAsText(file);
 }
 
+function etatEnvoi(c) {
+  var ex = (S.exportCh || {})[c];
+  if (!ex) return { t: 'pas encore envoyée', k: 'warn' };
+  if (pendingCh(c)) return { t: 'modifiée depuis l’envoi du ' + fmtDate(new Date(ex).toISOString()), k: 'warn' };
+  return { t: 'envoyée le ' + fmtDate(new Date(ex).toISOString()), k: 'ok' };
+}
 function renderEnvoi() {
   var el = $('v-envoi'), n = S.racks.length, h = '';
-  var pend = n > 0 && (!S.lastExport || S.lastChange > S.lastExport);
-  h += '<div class="stat"><div><b>' + n + '</b><span>racks saisis</span></div><div><b>' + S.chambres.filter(function (c) { return racksOf(c).length; }).length + '</b><span>chambres</span></div></div>';
+  var w = avecRacks(), sel = selChambres(), nbSel = sortedRacks(sel).length;
+  var aEnvoyer = w.filter(pendingCh);
+  h += '<div class="stat"><div><b>' + n + '</b><span>racks saisis</span></div><div><b>' + w.length + '</b><span>chambres</span></div></div>';
   if (!storageOk) h += '<div class="alert nok">Le téléphone refuse de garder les données (navigation privée ?). Envoyez le fichier tout de suite après chaque chambre.</div>';
   if (!n) h += '<div class="alert warn">Rien à envoyer pour l’instant.</div>';
-  else if (pend) h += '<div class="alert warn">' + (S.lastExport ? 'Des racks ont été saisis depuis le dernier envoi (' + fmtDate(new Date(S.lastExport).toISOString()) + ').' : 'Ces données n’ont pas encore été envoyées.') + '</div>';
-  else h += '<div class="alert ok">Tout est envoyé (' + fmtDate(new Date(S.lastExport).toISOString()) + ').</div>';
-  h += '<button type="button" class="btn pri" data-a="share"' + (n ? '' : ' disabled') + '><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 14v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg>Envoyer le fichier</button>';
-  h += '<div class="hint" style="margin:-2px 2px 14px">Choisissez ensuite « Mail », « Fichiers » ou « AirDrop » dans la fenêtre de l’iPhone. Deux fichiers partent ensemble (.json pour la GMAO, .csv lisible dans Excel).</div>';
-  h += '<div class="card"><h2>Par chambre</h2>' + S.chambres.map(function (c) {
-    var q = progressOf(c); return '<div class="row" style="padding:6px 0;border-top:1px solid var(--line)"><b>' + esc(c) + '</b><span class="muted">' + (q.total ? q.done + ' / ' + q.total + ' racks' : q.all + ' racks') + (q.hors ? ' (+' + q.hors + ' hors liste)' : '') + '</span></div>';
-  }).join('') + '</div>';
-  h += '<button type="button" class="btn" data-a="dlJson"' + (n ? '' : ' disabled') + '>Télécharger le .json</button>';
-  h += '<button type="button" class="btn" data-a="dlCsv"' + (n ? '' : ' disabled') + '>Télécharger le .csv</button>';
-  h += '<button type="button" class="btn" data-a="copy"' + (n ? '' : ' disabled') + '>Copier le tableau (à coller dans un mail)</button>';
+  else if (aEnvoyer.length) h += '<div class="alert warn">À envoyer : ' + aEnvoyer.map(esc).join(', ') + '</div>';
+  else h += '<div class="alert ok">Tout est envoyé.</div>';
+  if (w.length) {
+    h += '<div class="card"><h2>Chambres à envoyer</h2>';
+    w.forEach(function (c) {
+      var on = sel.indexOf(c) >= 0, st = etatEnvoi(c);
+      h += '<button type="button" class="selrow" data-a="selCh" data-c="' + esc(c) + '" role="checkbox" aria-checked="' + (on ? 'true' : 'false') + '">' +
+        '<span class="cb' + (on ? ' on' : '') + '">' + (on ? '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>' : '') + '</span>' +
+        '<span class="tx"><b>' + esc(c) + '</b><span class="' + st.k + '">' + racksOf(c).length + ' racks · ' + st.t + '</span></span></button>';
+    });
+    h += '<div class="two" style="margin-top:8px"><button type="button" class="btn" data-a="selAll" style="min-height:52px;font-size:16px">Tout cocher</button><button type="button" class="btn" data-a="selPend" style="min-height:52px;font-size:16px"' + (aEnvoyer.length ? '' : ' disabled') + '>Seulement à envoyer</button></div>';
+    h += '</div>';
+  }
+  var lib = sel.length === 1 ? esc(sel[0]) : (sel.length >= w.length && w.length > 1 ? 'toutes les chambres' : sel.length + ' chambres');
+  h += '<button type="button" class="btn pri" data-a="share"' + (nbSel ? '' : ' disabled') + '><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 14v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg>' + (nbSel ? 'Envoyer ' + lib + ' (' + nbSel + ' racks)' : 'Cochez une chambre') + '</button>';
+  h += '<div class="hint" style="margin:-2px 2px 14px">Le fichier ne contient <b>que les chambres cochées</b>. Rien n’est effacé sur ce téléphone. Choisissez ensuite « Mail », « Fichiers » ou « AirDrop ». Deux fichiers partent ensemble (.json pour la GMAO, .csv lisible dans Excel).</div>';
+  h += '<button type="button" class="btn" data-a="dlJson"' + (nbSel ? '' : ' disabled') + '>Télécharger le .json (chambres cochées)</button>';
+  h += '<button type="button" class="btn" data-a="dlCsv"' + (nbSel ? '' : ' disabled') + '>Télécharger le .csv (chambres cochées)</button>';
+  h += '<button type="button" class="btn" data-a="copy"' + (nbSel ? '' : ' disabled') + '>Copier le tableau (à coller dans un mail)</button>';
   h += '<label class="btn" style="cursor:pointer">Reprendre un fichier déjà exporté<input id="impFile" type="file" accept=".json,application/json" hidden></label>';
+  h += '<div class="hint" style="margin:-2px 2px 14px">Reprendre un fichier ajoute ou met à jour ses racks. Les autres chambres ne sont jamais effacées.</div>';
   el.innerHTML = h;
   updateBadge();
 }
@@ -706,10 +770,10 @@ opt('continu', 'Écoute vocale continue', 'Le micro se relance tout seul après 
     '<li><b>À la voix</b> : touchez le micro une fois et dites tout d’un trait : « rack A 53, six étages, deux dynamiques, trois palettes ». Les zéros inutiles sont retirés (A053 → A53). Trois notes montantes = rack enregistré. En cas de doute, l’appli fait deux bips et vous pose la question à voix haute : répondez (« trois », « oui ») ou répétez. « Rack suivant, six étages… » utilise l’adresse proposée.</li>' +
     '<li><b>Logique de numérotation</b> : l’appli repère la récurrence des derniers racks saisis (ex. A50, A51, A54, A55 → A58, A59) et propose l’adresse suivante en conséquence.</li>' +
     '<li><b>Supprimer un rack</b> : onglet <b>Liste</b>, corbeille rouge sur sa ligne ; ou ouvrez le rack et touchez « Supprimer ce rack » ; ou dites « supprimer rack A 53 ». Le bouton « Annuler » le récupère pendant quelques secondes.</li>' +
-'<li>En fin de chambre : onglet <b>Envoyer</b>.</li></ol></div>';
+'<li>En fin de chambre : onglet <b>Envoyer</b>, cochez la ou les chambres à envoyer. Le fichier ne contient que celles-là ; rien n’est effacé sur le téléphone.</li></ol></div>';
   h += '<div class="card"><h2>Dictée vocale</h2><div class="small muted">Si le bouton micro ne fonctionne pas (ou n’apparaît pas), activez la dictée du clavier : <b>Réglages iPhone › Général › Clavier › Activer la dictée</b>, puis touchez le micro du clavier dans le champ « Dictée ». Dans une chambre sans réseau, la dictée peut ne pas marcher : les boutons restent utilisables.</div></div>';
   h += '<button type="button" class="btn dng" data-a="wipeAsk">Effacer toutes les données de ce téléphone</button>';
-  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 5 · données enregistrées sur ce téléphone uniquement</div>';
+  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 6 · données enregistrées sur ce téléphone uniquement</div>';
   $('v-regl').innerHTML = h;
 }
 
@@ -1181,25 +1245,32 @@ case 'delCur': { var cr = S.racks.filter(function (r) { return r.id === f.editin
     case 'delAsk': { var did = el.getAttribute('data-id'); var rk = S.racks.filter(function (r) { return r.id === did; })[0]; if (rk) confirmBox('Supprimer le rack ' + rk.adresse + ' ?', 'Oui, supprimer', function () { deleteRack(did); }, true); break; }
     case 'cfg': { var k = el.getAttribute('data-k'); S.cfg[k] = !S.cfg[k]; persist(); renderRegl(); if (k === 'veille') { if (S.cfg.veille) wakeOn(); else wakeOff(); } if (k === 'son' && S.cfg.son) beep(true); break; }
     case 'share': shareFiles(); break;
-    case 'dlJson': download(fileName() + '.json', buildJson(), 'application/json'); markExported(); break;
-    case 'dlCsv': download(fileName() + '.csv', buildCsv(), 'text/csv;charset=utf-8'); markExported(); break;
+    case 'selCh': {
+      var cc = el.getAttribute('data-c'), cur0 = selChambres();
+      var ix = cur0.indexOf(cc); if (ix >= 0) cur0.splice(ix, 1); else cur0.push(cc);
+      S.envoiSel = cur0; persist(); renderEnvoi(); break;
+    }
+    case 'selAll': S.envoiSel = null; persist(); renderEnvoi(); break;
+    case 'selPend': S.envoiSel = avecRacks().filter(pendingCh); persist(); renderEnvoi(); break;
+    case 'dlJson': { var s1 = selChambres(); download(fileName(s1) + '.json', buildJson(s1), 'application/json'); markExported(s1); break; }
+    case 'dlCsv': { var s2 = selChambres(); download(fileName(s2) + '.csv', buildCsv(s2), 'text/csv;charset=utf-8'); markExported(s2); break; }
     case 'copy': {
-      var txt = buildCsv().replace(/^﻿/, '').replace(/;/g, '\t');
-      var done = function () { markExported(); toast('Tableau copié : collez-le dans un mail', null, 'good'); };
+      var s3 = selChambres(), txt = buildCsv(s3).replace(/^﻿/, '').replace(/;/g, '\t');
+      var done = function () { markExported(s3); toast('Tableau copié : collez-le dans un mail', null, 'good'); };
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(function () { toast('Copie refusée', null, 'err'); });
       else { var ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { toast('Copie impossible', null, 'err'); } ta.remove(); }
       break;
     }
     case 'wipeAsk':
       confirmBox('Effacer tous les racks saisis sur ce téléphone ?', 'Oui, tout effacer', function () {
-        if (S.racks.length && (!S.lastExport || S.lastChange > S.lastExport)) {
+        if (S.chambres.some(pendingCh)) {
           confirmBox('Ces données n’ont pas été envoyées. Les effacer quand même ?', 'Oui, effacer sans envoyer', function () { wipe(); }, true);
         } else wipe();
       }, true); break;
   }
 });
 function wipe() {
-  var d = defaults(); S.racks = []; S.chambres = d.chambres; S.form = d.form; S.last = null; S.lastExport = null; S.lastChange = 0; undoSnap = null;
+  var d = defaults(); S.racks = []; S.chambres = d.chambres; S.form = d.form; S.last = null; S.lastExport = null; S.lastChange = 0; S.exportCh = {}; S.changeCh = {}; S.envoiSel = null; undoSnap = null;
   S.form.adresse = suggestNext(S.form.chambre, '');
   persist(); refreshSaisie(); renderListe(); renderEnvoi(); renderRegl(); toast('Données effacées');
 }
