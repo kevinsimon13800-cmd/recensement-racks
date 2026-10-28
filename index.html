@@ -329,7 +329,8 @@ function defaults() {
     v: 2, chambres: ch.slice(), racks: [],
     cfg: { reprise: true, son: true, veille: true, continu: true, auto: true, parle: true },
     form: { chambre: ch[0] || '', adresse: '', niveaux: null, dyn: 0, dynLevels: [], palettes: null, remarque: '', editingId: null },
-    last: null, lastExport: null, lastChange: 0, exportCh: {}, changeCh: {}, envoiSel: null
+    last: null, lastExport: null, lastChange: 0, exportCh: {}, changeCh: {}, envoiSel: null,
+    plans: { 'Chambre Surge-2': ['BA', 'BB', 'BC', 'BD', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ', 'BK', 'BL'] }
   };
 }
 var S = load();
@@ -346,6 +347,7 @@ function load() {
         if (o.cfg) for (var k in o.cfg) d.cfg[k] = o.cfg[k];
         if (o.form) for (var f in o.form) d.form[f] = o.form[f];
         d.last = o.last || null; d.lastExport = o.lastExport || null; d.lastChange = o.lastChange || 0;
+        if (o.plans && typeof o.plans === 'object') d.plans = o.plans;
         d.exportCh = o.exportCh || {}; d.changeCh = o.changeCh || {}; d.envoiSel = Array.isArray(o.envoiSel) ? o.envoiSel : null;
         /* v6 : suivi des envois chambre par chambre (reprise de l'ancien suivi global) */
         if (!o.exportCh && o.lastExport) d.chambres.forEach(function (c) { d.exportCh[c] = o.lastExport; d.changeCh[c] = o.lastChange || 0; });
@@ -768,12 +770,15 @@ opt('continu', 'Écoute vocale continue', 'Le micro se relance tout seul après 
     '<li>Réglez <b>étages</b>, <b>dynamiques</b> et <b>format</b>, puis <b>ENREGISTRER</b>. L’adresse suivante s’affiche aussitôt.</li>' +
     '<li>Les valeurs du rack précédent sont reprises : si le rack suivant est identique, un seul geste suffit.</li>' +
     '<li><b>À la voix</b> : touchez le micro une fois et dites tout d’un trait : « rack A 53, six étages, deux dynamiques, trois palettes ». Les zéros inutiles sont retirés (A053 → A53). Trois notes montantes = rack enregistré. En cas de doute, l’appli fait deux bips et vous pose la question à voix haute : répondez (« trois », « oui ») ou répétez. « Rack suivant, six étages… » utilise l’adresse proposée.</li>' +
+    '<li><b>Plan des allées</b> (Réglages) : les lettres entendues sont vérifiées avec les allées de la chambre et l’allée en cours. Un changement d’allée en pleine série est confirmé à voix haute.</li>' +
     '<li><b>Logique de numérotation</b> : l’appli repère la récurrence des derniers racks saisis (ex. A50, A51, A54, A55 → A58, A59) et propose l’adresse suivante en conséquence.</li>' +
     '<li><b>Supprimer un rack</b> : onglet <b>Liste</b>, corbeille rouge sur sa ligne ; ou ouvrez le rack et touchez « Supprimer ce rack » ; ou dites « supprimer rack A 53 ». Le bouton « Annuler » le récupère pendant quelques secondes.</li>' +
 '<li>En fin de chambre : onglet <b>Envoyer</b>, cochez la ou les chambres à envoyer. Le fichier ne contient que celles-là ; rien n’est effacé sur le téléphone.</li></ol></div>';
+  h += '<div class="card"><h2>Plan des allées</h2><div class="small muted" style="margin-bottom:8px">Les allées de chaque chambre, séparées par des espaces. L’appli s’en sert pour corriger les lettres mal entendues (« BV » → BB) ou perdues (« B 41 » → BB41 si vous êtes dans l’allée BB). Laissez vide : l’appli apprend les allées au fil des saisies.</div>' +
+    S.chambres.map(function (c) { var p = (S.plans || {})[c] || []; return '<div class="lab" style="margin:10px 2px 4px">' + esc(c) + '</div><input class="in plan-in" data-c="' + esc(c) + '" type="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ex. BA BB BC" value="' + esc(p.join(' ')) + '">'; }).join('') + '</div>';
   h += '<div class="card"><h2>Dictée vocale</h2><div class="small muted">Si le bouton micro ne fonctionne pas (ou n’apparaît pas), activez la dictée du clavier : <b>Réglages iPhone › Général › Clavier › Activer la dictée</b>, puis touchez le micro du clavier dans le champ « Dictée ». Dans une chambre sans réseau, la dictée peut ne pas marcher : les boutons restent utilisables.</div></div>';
   h += '<button type="button" class="btn dng" data-a="wipeAsk">Effacer toutes les données de ce téléphone</button>';
-  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 7 · données enregistrées sur ce téléphone uniquement</div>';
+  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 8 · données enregistrées sur ce téléphone uniquement</div>';
   $('v-regl').innerHTML = h;
 }
 
@@ -859,7 +864,7 @@ var FILLER = /^(et|tiret|euh|numero|le|la|l)$/;
 /* petits mots francais a ne jamais prendre pour des lettres d'adresse */
 var MOTS = /^(et|le|la|les|un|une|du|au|aux|est|il|je|on|ou|oui|non|bon|ma|mon|sa|son|ta|ton|tu|ne|ni|si|va|vu|lu|par|pour|sur|qui|que|quoi|mais|car|pas|plus|dont|avec|chez|ici|y)$/;
 /* lettres qui se ressemblent a l'oral */
-var SON = ['BDPTVEGCW', 'AHK', 'MN', 'FS', 'IY'];
+var SON = ['BDPTVEGCW', 'AHK', 'MN', 'FS', 'IY', 'GJ', 'LE'];
 function sonProche(x, y) { for (var q = 0; q < SON.length; q++) if (SON[q].indexOf(x) >= 0 && SON[q].indexOf(y) >= 0) return true; return false; }
 
 /* "zero trente neuf" -> "039" ; "cent douze" -> "112" ; "un deux" -> "12" */
@@ -881,8 +886,25 @@ function numRun(run) {
 }
 function letterOf(t) { if (/^[a-z]$/.test(t)) return t.toUpperCase(); return has(LETTER, t) ? LETTER[t] : ''; }
 /* Transforme les mots entendus en adresse, quel que soit le format */
-function zoneToAddr(toks) {
+/* decoupe un mot en noms de lettres : "bebe" -> BB, "bede" -> BD, "beka" -> BK, "bei" -> BI */
+function decoupeLettres(t) {
+  if (t.length < 3 || MOTS.test(t)) return '';
+  var best = new Array(t.length + 1); best[0] = '';
+  for (var i = 0; i < t.length; i++) {
+    if (best[i] == null) continue;
+    for (var L = 1; L <= 6 && i + L <= t.length; L++) {
+      var part = t.substr(i, L), c = '';
+      if (L === 1) { if (/[aeiouy]/.test(part)) c = part.toUpperCase(); }
+      else if (has(LETTER, part)) c = LETTER[part];
+      if (c && best[i + L] == null) best[i + L] = best[i] + c;
+    }
+  }
+  var r = best[t.length];
+  return r && r.length >= 2 ? r : '';
+}
+function zoneToAddr(toks, plan) {
   var out = '', unk = [], i = 0;
+  function dansPlan(s) { return plan && plan.some(function (p) { return p.indexOf(s) === 0; }); }
   while (i < toks.length) {
     var t = toks[i];
     if (t === 'double' && i + 1 < toks.length) {
@@ -897,10 +919,16 @@ function zoneToAddr(toks) {
       out += numRun(run); continue;
     }
     if (/^[a-z0-9]+$/.test(t) && /\d/.test(t)) { out += t.toUpperCase(); i++; continue; }
+    /* "be", "ce", "de"... : nom d'une lettre OU allee ecrite en sigle (BE, CE, DE) ; le plan des allees tranche */
+    if (t.length === 2 && has(LETTER, t) && dansPlan(out + t.toUpperCase()) && !(i + 1 < toks.length && letterOf(toks[i + 1]))) { out += t.toUpperCase(); i++; continue; }
     var L = letterOf(t); if (L) { out += L; i++; continue; }
     if (FILLER.test(t)) { i++; continue; }
-    /* sigle ecrit en minuscules ("bi 78", "ab 12") : ce sont des lettres d'adresse */
-    if (/^[a-z]{2,3}$/.test(t) && !MOTS.test(t)) { out += t.toUpperCase(); i++; continue; }
+    /* groupe de lettres : sigle ("bi", "ab") ou noms de lettres colles ("bebe", "bede") ; le plan des allees tranche */
+    if (/^[a-z]{2,8}$/.test(t) && !MOTS.test(t)) {
+      var seg = decoupeLettres(t), sig = t.length <= 3 ? t.toUpperCase() : '';
+      var choix = (seg && dansPlan(out + seg)) ? seg : (sig && dansPlan(out + sig)) ? sig : (seg || sig);
+      if (choix) { out += choix; i++; continue; }
+    }
     unk.push(t); i++;
   }
   return { addr: out, unk: unk };
@@ -953,6 +981,44 @@ function lastAddr(ch) { var rs = seqOf(ch); return rs.length ? rs[rs.length - 1]
 /* adresse lisible a voix haute : "A53B" -> "A 53 B" */
 function dire(a) { return String(a || '').replace(/([A-Z])(?=\d)/g, '$1 ').replace(/(\d)(?=[A-Z])/g, '$1 '); }
 
+/* ---------- plan des allees et allee en cours ---------- */
+function planOf(ch) {
+  var p = (S.plans || {})[ch];
+  if (Array.isArray(p) && p.length) return { list: p, officiel: true };
+  var vus = [];
+  racksOf(ch).forEach(function (r) { var s = splitAddr(r.adresse); if (s && s.pre && vus.indexOf(s.pre) < 0) vus.push(s.pre); });
+  return { list: vus, officiel: false };
+}
+function lettresProches(x, y) {
+  if (x.length !== y.length || x === y) return false;
+  var dif = 0;
+  for (var i = 0; i < x.length; i++) if (x.charAt(i) !== y.charAt(i)) { dif++; if (!sonProche(x.charAt(i), y.charAt(i))) return false; }
+  return dif === 1;
+}
+/* Verifie les lettres de l'adresse avec le plan des allees et l'allee en cours.
+   Retourne null si rien a corriger, sinon { addr, why, sure, options } */
+function resolveAllee(a, ctx) {
+  var s = splitAddr(a); if (!s || !ctx.plan || !ctx.plan.length) return null;
+  var plan = ctx.plan, cur = ctx.alley || '', dansPlan = plan.indexOf(s.pre) >= 0;
+  var suite = !!cur && ctx.lastNum != null && Math.abs(s.num - ctx.lastNum) <= 6;
+  function avec(pre) { return pre + s.num + s.suf; }
+  if (dansPlan) {
+    if (!cur || s.pre === cur) return null;
+    /* autre allee du plan en pleine serie : on fait confirmer le changement d'allee */
+    if (ctx.runLen >= 3 || (ctx.runLen >= 2 && (suite || lettresProches(s.pre, cur)))) return { addr: a, why: 'changement', sure: false };
+    return null;
+  }
+  /* lettres hors plan : lettre perdue ("B" pour "BB") ou lettre mal entendue ("BV" pour "BB") */
+  var manque = plan.filter(function (p) { return p.length > s.pre.length && p.indexOf(s.pre) === 0; });
+  var proches = plan.filter(function (p) { return lettresProches(s.pre, p); });
+  if (cur && (manque.indexOf(cur) >= 0 || proches.indexOf(cur) >= 0)) return { addr: avec(cur), why: 'allee', sure: suite };
+  if (!ctx.officiel) return null;
+  var cands = proches.length ? proches : manque;
+  if (cands.length === 1) return { addr: avec(cands[0]), why: 'allee', sure: false };
+  if (cands.length > 1) return { addr: avec(cands[0]), why: 'allee-ambigu', sure: false, options: cands.slice(0, 4).map(avec) };
+  return { addr: a, why: 'hors-plan', sure: false };
+}
+
 /* Fonction pure : texte -> intentions.
    ctx = { predicted: adresse attendue, prefix: lettres du dernier rack, current: adresse affichee } */
 function parseCommande(texte, ctx) {
@@ -983,14 +1049,17 @@ function parseCommande(texte, ctx) {
       if (last3.every(function (t) { return numTok(t) !== null; })) e -= 3;
     }
     if (e > s0) {
-      var z = zoneToAddr(tk.slice(s0, e));
+      var z = zoneToAddr(tk.slice(s0, e), ctx.plan);
       var a = normAddr(z.addr), why = z.unk.length ? 'mots' : '', sure = !z.unk.length;
       if (a && /^\d+[A-Z]*$/.test(a) && ctx.prefix && !z.unk.length) {
         /* lettre perdue ("53" au lieu de "A53") : on reprend les lettres du rack precedent */
         a = ctx.prefix + a; why = 'prefixe'; sure = sure && a === ctx.predicted;
       }
       if (a && /[A-Z]/.test(a) && /\d/.test(a) && a.length <= 12) {
-        if (ctx.predicted && a !== ctx.predicted && a.length === ctx.predicted.length) {
+        var al = resolveAllee(a, ctx);
+        if (al) { res.heardAddr = a; a = al.addr; why = al.why; if (!al.sure) sure = false; res.allee = al; }
+        var sa = splitAddr(a);
+        if (!al && !(sa && ctx.alley && sa.pre === ctx.alley) && ctx.predicted && a !== ctx.predicted && a.length === ctx.predicted.length) {
           /* une seule lettre differente et de son proche (D/B, T/B...) : on suit la logique */
           var dif = 0, pos = -1;
           for (i = 0; i < a.length; i++) if (a.charAt(i) !== ctx.predicted.charAt(i)) { dif++; pos = i; }
@@ -1044,8 +1113,11 @@ function scoreParse(r, ctx) {
 }
 function knownOf(ch) { return racksOf(ch).map(function (r) { return r.adresse; }); }
 function voiceCtx() {
-  var f = S.form, pr = predictNext(f.chambre), la = splitAddr(lastAddr(f.chambre));
-  return { predicted: (!f.editingId && f.adresse) ? f.adresse : (pr ? pr.addr : ''), current: f.adresse, prefix: la ? la.pre : '', pending: pendingField };
+  var f = S.form, pr = predictNext(f.chambre), seq = seqOf(f.chambre), la = splitAddr(seq[seq.length - 1]), pl = planOf(f.chambre), run = 0;
+  for (var i = seq.length - 1; i >= 0; i--) { var s = splitAddr(seq[i]); if (!s || !la || s.pre !== la.pre) break; run++; }
+  /* adresse attendue = celle donnee par la logique des racks deja ENREGISTRES (pas celle d'une phrase non confirmee) */
+  return { predicted: pr ? pr.addr : ((!f.editingId && f.adresse) ? f.adresse : ''), current: f.adresse, prefix: la ? la.pre : '', pending: pendingField,
+    plan: pl.list, officiel: pl.officiel, alley: la ? la.pre : '', lastNum: la ? la.num : null, runLen: run };
 }
 
 var voiceAddr = null;      /* adresse dictee et sure, en attente des valeurs manquantes */
@@ -1077,6 +1149,10 @@ function applyCommande(texte, final, meta) {
     if (undoSnap) { undoLast(); voiceAddr = null; return { ok: true, msg: 'Dernier enregistrement annulé', say: 'Annulé' }; }
     return { ok: false, msg: 'Rien à annuler' };
   }
+  /* "oui" / "valider" seul alors que rien n'est en attente : on n'enregistre rien */
+  if (r.save && !r.addr && r.niveaux == null && r.dyn == null && r.palettes == null && pendingField !== 'confirmer' && !(voiceAddr && voiceAddr === f.adresse)) {
+    return { ok: false, msg: 'Rien à valider : dites d’abord le rack.' };
+  }
   if (r.addrMiss && !r.save) return { ok: false, msg: 'Adresse pas comprise (« ' + r.addrMiss + ' ») : rien n’est enregistré, répétez.', ask: 'Je n’ai pas compris l’adresse. Répétez.' };
   var A = r.addr, keep = null;
   if (A) {
@@ -1090,6 +1166,10 @@ function applyCommande(texte, final, meta) {
     if (A.why === 'mots') notes.push('mots non compris dans l’adresse : « ' + A.unk.join(' ') + ' »');
     else if (A.why === 'prefixe') notes.push('lettre reprise du rack précédent');
     else if (A.why === 'corrige') notes.push('entendu ' + r.heardAddr + ', corrigé en ' + A.addr + ' selon la logique');
+    else if (A.why === 'allee') notes.push('entendu ' + r.heardAddr + ', compris ' + A.addr + ' (allée ' + splitAddr(A.addr).pre + ')');
+    else if (A.why === 'allee-ambigu') notes.push('entendu ' + r.heardAddr + ' : ' + r.allee.options.join(' ou ') + ' ?');
+    else if (A.why === 'changement') notes.push('changement d’allée : ' + A.addr + ' ?');
+    else if (A.why === 'hors-plan') notes.push('allée ' + splitAddr(A.addr).pre + ' absente du plan de la chambre');
   } else if (meta.unsure && (r.niveaux != null || r.palettes != null)) needConfirm = true;
   if (r.niveaux != null) { f.niveaux = r.niveaux; dynConsistent(); did.push(r.niveaux + ' étages'); }
   if (r.dyn == null && A && f.niveaux != null && !f.editingId && !keep) r.dyn = 0;
@@ -1119,6 +1199,15 @@ function applyCommande(texte, final, meta) {
     else if (!f.adresse || (!addrOk && valeurs && !A)) { ask = 'Quel rack ?'; pendingField = 'adresse'; }
     else if (f.niveaux == null) { ask = 'Combien d’étages ?'; pendingField = 'niveaux'; }
     else if (f.palettes == null) { ask = 'Combien de palettes ?'; pendingField = 'palettes'; }
+    else if (A && A.why === 'changement') {
+      ask = 'Changement d’allée : ' + dire(f.adresse) + '. Dites oui, ou répétez.'; pendingField = 'confirmer'; voiceAddr = null;
+    }
+    else if (A && A.why === 'allee-ambigu') {
+      ask = 'Allée ' + r.allee.options.map(function (o) { return dire(splitAddr(o).pre); }).join(', ou ') + ' ? Répétez l’adresse.'; pendingField = null; voiceAddr = null;
+    }
+    else if (A && A.why === 'hors-plan') {
+      ask = 'L’allée ' + dire(splitAddr(f.adresse).pre) + ' n’est pas dans le plan. Répétez l’adresse, ou dites oui pour la garder.'; pendingField = 'confirmer'; voiceAddr = null;
+    }
     else if (needConfirm || !addrOk) {
       ask = 'J’ai compris ' + dire(f.adresse) + ', ' + f.niveaux + ' étages, ' + f.dyn + ' dynamique' + (f.dyn > 1 ? 's' : '') + ', ' + f.palettes + ' palettes. Dites oui, ou répétez.';
       pendingField = 'confirmer'; voiceAddr = null;
@@ -1283,6 +1372,11 @@ function wipe() {
 }
 $('mask').addEventListener('click', function (e) { if (e.target === $('mask')) closeSheet(); });
 document.addEventListener('change', function (e) {
+  if (e.target && e.target.classList && e.target.classList.contains('plan-in')) {
+    var c = e.target.getAttribute('data-c'), l = String(e.target.value || '').toUpperCase().split(/[^A-Z]+/).filter(Boolean);
+    S.plans = S.plans || {}; if (l.length) S.plans[c] = l; else delete S.plans[c];
+    persist(); refreshSaisie(); toast(l.length ? 'Plan de ' + c + ' : ' + l.length + ' allées' : 'Plan de ' + c + ' effacé (allées apprises)', null, 'good');
+  }
   if (e.target && e.target.id === 'impFile' && e.target.files && e.target.files[0]) { importFile(e.target.files[0]); e.target.value = ''; }
 });
 $('adresse').addEventListener('input', function () {
@@ -1322,7 +1416,7 @@ navigator.serviceWorker.addEventListener('controllerchange', function () { if (h
 }
 if (navigator.storage && navigator.storage.persist) { try { navigator.storage.persist(); } catch (e) { } }
 
-window.__RC = { parseCommande: parseCommande, patternStep: patternStep, suggestNext: suggestNext, neighbor: neighbor, S: function () { return S; }, save: save, buildJson: buildJson, buildCsv: buildCsv, applyCommande: applyCommande, setTab: setTab };
+window.__RC = { parseCommande: parseCommande, patternStep: patternStep, suggestNext: suggestNext, neighbor: neighbor, S: function () { return S; }, save: save, buildJson: buildJson, buildCsv: buildCsv, applyCommande: applyCommande, setTab: setTab, voiceCtx: voiceCtx, resolveAllee: resolveAllee };
 })();
 </script>
 </body>
