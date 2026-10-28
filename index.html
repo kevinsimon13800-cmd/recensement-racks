@@ -778,7 +778,7 @@ opt('continu', 'Écoute vocale continue', 'Le micro se relance tout seul après 
     S.chambres.map(function (c) { var p = (S.plans || {})[c] || []; return '<div class="lab" style="margin:10px 2px 4px">' + esc(c) + '</div><input class="in plan-in" data-c="' + esc(c) + '" type="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ex. BA BB BC" value="' + esc(p.join(' ')) + '">'; }).join('') + '</div>';
   h += '<div class="card"><h2>Dictée vocale</h2><div class="small muted">Si le bouton micro ne fonctionne pas (ou n’apparaît pas), activez la dictée du clavier : <b>Réglages iPhone › Général › Clavier › Activer la dictée</b>, puis touchez le micro du clavier dans le champ « Dictée ». Dans une chambre sans réseau, la dictée peut ne pas marcher : les boutons restent utilisables.</div></div>';
   h += '<button type="button" class="btn dng" data-a="wipeAsk">Effacer toutes les données de ce téléphone</button>';
-  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 8 · données enregistrées sur ce téléphone uniquement</div>';
+  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 9 · données enregistrées sur ce téléphone uniquement</div>';
   $('v-regl').innerHTML = h;
 }
 
@@ -856,6 +856,8 @@ function isNumWord(t) { return has(NUM, t) && t !== 'set' && t !== 'cet'; }
 function isEtage(t) { return /^(etages?|niveaux?|etageres?)$/.test(t); }
 function isDyn(t) { return /^(dynamiques?|dynamics?|dyna|dynas)$/.test(t); }
 function isPal(t) { return /^pal+et+es?$/.test(t) || /^palet+es?$/.test(t) || t === 'pallets' || t === 'pallet'; }
+/* mots de simple confirmation : n'enregistrent que si une question est en attente */
+function isConfirmWord(t) { return /^(oui|ouais|exact|exactement|correct|confirme|confirmer)$/.test(t); }
 function isCmdSave(t) { return /^(valider|valide|validez|enregistrer|enregistre|enregistrez|termine|ok|okay|oui|ouais|exact|exactement|correct|confirme|confirmer)$/.test(t); }
 function isCmdUndo(t) { return /^(annuler|annule|supprimer|supprime|efface|effacer)$/.test(t); }
 function isKw(t) { return isEtage(t) || isDyn(t) || isPal(t) || isCmdSave(t) || isCmdUndo(t); }
@@ -1039,6 +1041,8 @@ function parseCommande(texte, ctx) {
     var pa = ctx.predicted || ctx.current;
     used[s0] = true; e = s0 + 1;
     res.addr = { addr: pa, heard: 'suivant', sure: true, why: 'suivant', unk: [] }; res.adresse = pa; res.vu = true;
+    /* "suivant" dit seul = enregistrer le rack propose tel qu'il est affiche */
+    if (e >= tk.length) { res.save = true; res.saveWord = 'suivant'; }
   } else {
     /* zone adresse : du debut jusqu'aux valeurs */
     while (e < tk.length && !valStart(e)) e++;
@@ -1092,7 +1096,7 @@ function parseCommande(texte, ctx) {
         used[k] = used[i] = true; n = numTok(tk[k]);
         if (n >= 2 && n <= 4) { res.palettes = n; res.vu = true; } else { res.notes.push('format ' + n + ' palettes non prévu (2, 3 ou 4)'); res.bad = true; }
       }
-    } else if (isCmdSave(t)) { res.save = true; res.vu = true; used[i] = true; hasKw = true; }
+    } else if (isCmdSave(t)) { res.save = true; if (!res.saveWord || !isConfirmWord(t)) res.saveWord = t; res.vu = true; used[i] = true; hasKw = true; }
     else if (isCmdUndo(t)) { res.undo = true; res.vu = true; used[i] = true; hasKw = true; }
   }
   /* raccourci : trois nombres seuls (apres l'adresse) = etages, dynamiques, palettes */
@@ -1149,16 +1153,19 @@ function applyCommande(texte, final, meta) {
     if (undoSnap) { undoLast(); voiceAddr = null; return { ok: true, msg: 'Dernier enregistrement annulé', say: 'Annulé' }; }
     return { ok: false, msg: 'Rien à annuler' };
   }
-  /* "oui" / "valider" seul alors que rien n'est en attente : on n'enregistre rien */
-  if (r.save && !r.addr && r.niveaux == null && r.dyn == null && r.palettes == null && pendingField !== 'confirmer' && !(voiceAddr && voiceAddr === f.adresse)) {
-    return { ok: false, msg: 'Rien à valider : dites d’abord le rack.' };
+  /* "enregistrer", "valider", "ok", "suivant" dits seuls = enregistrer le rack affiche (adresse proposee + valeurs reprises).
+     "oui" seul ne sert qu'a repondre a une question : sans question en attente, il ne fait rien. */
+  var seul = r.save && !r.addr && r.niveaux == null && r.dyn == null && r.palettes == null;
+  if (seul && isConfirmWord(r.saveWord || '') && pendingField !== 'confirmer') {
+    return { ok: false, msg: 'Aucune question en attente. Dites « enregistrer » pour enregistrer le rack affiché.' };
   }
+  if (r.save && !f.adresse && !r.addr) return { ok: false, msg: 'Aucun rack affiché : dites l’adresse.', ask: 'Quel rack ?' };
   if (r.addrMiss && !r.save) return { ok: false, msg: 'Adresse pas comprise (« ' + r.addrMiss + ' ») : rien n’est enregistré, répétez.', ask: 'Je n’ai pas compris l’adresse. Répétez.' };
   var A = r.addr, keep = null;
   if (A) {
     keep = pendingField === 'adresse' ? { niveaux: f.niveaux, dyn: f.dyn, palettes: f.palettes } : null;
     gotoAddress(A.addr, true);
-    if (!f.editingId && pendingField !== 'adresse') { f.niveaux = null; f.dyn = 0; f.dynLevels = []; f.palettes = null; f.remarque = ''; }
+    if (!f.editingId && pendingField !== 'adresse' && A.why !== 'suivant') { f.niveaux = null; f.dyn = 0; f.dynLevels = []; f.palettes = null; f.remarque = ''; }
     else if (!f.editingId && pendingField === 'adresse' && keep) { f.niveaux = keep.niveaux; f.dyn = keep.dyn; f.palettes = keep.palettes; dynConsistent(); }
     did.push(A.addr);
     voiceAddr = A.addr;
@@ -1172,7 +1179,7 @@ function applyCommande(texte, final, meta) {
     else if (A.why === 'hors-plan') notes.push('allée ' + splitAddr(A.addr).pre + ' absente du plan de la chambre');
   } else if (meta.unsure && (r.niveaux != null || r.palettes != null)) needConfirm = true;
   if (r.niveaux != null) { f.niveaux = r.niveaux; dynConsistent(); did.push(r.niveaux + ' étages'); }
-  if (r.dyn == null && A && f.niveaux != null && !f.editingId && !keep) r.dyn = 0;
+  if (r.dyn == null && A && r.niveaux != null && !f.editingId && !keep) r.dyn = 0;
   if (r.dyn != null) {
     if (f.niveaux == null) { notes.push('dynamiques sans étages'); }
     else {
@@ -1185,6 +1192,8 @@ function applyCommande(texte, final, meta) {
   notes = notes.concat(r.notes);
   persist(); refreshSaisie();
   var valeurs = r.niveaux != null || r.dyn != null || r.palettes != null;
+  /* valeurs dites sans adresse : elles vont au rack affiche (adresse proposee par la logique), comme « enregistrer » */
+  if (!A && valeurs && f.adresse && pendingField !== 'confirmer' && !r.addrMiss) voiceAddr = f.adresse;
   var addrOk = !!f.adresse && voiceAddr === f.adresse;
   var complet = !validate();
   if (final !== false) {
@@ -1267,12 +1276,17 @@ function startVoice() {
       var premier = cands[0];
       cands.sort(function (a, b) { return b.s - a.s; });
       var best = cands[0], unsure = false;
-      /* ce que l'iPhone a ecrit en premier est prioritaire s'il est complet et clair */
-      if (premier.p.addr && premier.p.addr.sure && premier.p.niveaux != null && premier.p.palettes != null && !premier.p.bad) best = premier;
-      /* les hypotheses du telephone ne sont pas d'accord sur l'adresse : on fait confirmer */
-      for (i = 1; i < cands.length; i++) {
-        var o = cands[i];
-        if (o.s >= best.s - 1 && o.p.adresse && best.p.adresse && o.p.adresse !== best.p.adresse && best.p.adresse !== ctx.predicted) unsure = true;
+      /* ce que l'iPhone a ecrit en premier est prioritaire s'il est complet et clair,
+         ou si c'est une simple commande ("enregistrer", "annuler", "oui") */
+      var premierClair = premier.p.addr && premier.p.addr.sure && premier.p.niveaux != null && premier.p.palettes != null && !premier.p.bad;
+      var premierCommande = !premier.p.addr && (premier.p.save || premier.p.undo || premier.p.del);
+      if (premierClair || premierCommande) best = premier;
+      else {
+        /* premiere transcription incomplete : si les autres hypotheses ne sont pas d'accord sur l'adresse, on fait confirmer */
+        for (i = 0; i < cands.length; i++) {
+          var o = cands[i]; if (o === best) continue;
+          if (o.s >= best.s - 1 && o.p.adresse && best.p.adresse && o.p.adresse !== best.p.adresse && best.p.adresse !== ctx.predicted) unsure = true;
+        }
       }
       if (best.c > 0 && best.c < 0.35) unsure = true;
       var out = applyCommande(best.t, true, { unsure: unsure });
