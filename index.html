@@ -773,7 +773,7 @@ opt('continu', 'Écoute vocale continue', 'Le micro se relance tout seul après 
 '<li>En fin de chambre : onglet <b>Envoyer</b>, cochez la ou les chambres à envoyer. Le fichier ne contient que celles-là ; rien n’est effacé sur le téléphone.</li></ol></div>';
   h += '<div class="card"><h2>Dictée vocale</h2><div class="small muted">Si le bouton micro ne fonctionne pas (ou n’apparaît pas), activez la dictée du clavier : <b>Réglages iPhone › Général › Clavier › Activer la dictée</b>, puis touchez le micro du clavier dans le champ « Dictée ». Dans une chambre sans réseau, la dictée peut ne pas marcher : les boutons restent utilisables.</div></div>';
   h += '<button type="button" class="btn dng" data-a="wipeAsk">Effacer toutes les données de ce téléphone</button>';
-  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 6 · données enregistrées sur ce téléphone uniquement</div>';
+  h += '<div class="hint" style="text-align:center;margin-top:4px">Version 7 · données enregistrées sur ce téléphone uniquement</div>';
   $('v-regl').innerHTML = h;
 }
 
@@ -856,6 +856,8 @@ function isCmdUndo(t) { return /^(annuler|annule|supprimer|supprime|efface|effac
 function isKw(t) { return isEtage(t) || isDyn(t) || isPal(t) || isCmdSave(t) || isCmdUndo(t); }
 var SKIP = /^(adresse|adresses|rack|racks|raque|raques|rac|rak|rake|le|la|l|emplacement|allee|position|alors|euh|bon|donc|numero|du)$/;
 var FILLER = /^(et|tiret|euh|numero|le|la|l)$/;
+/* petits mots francais a ne jamais prendre pour des lettres d'adresse */
+var MOTS = /^(et|le|la|les|un|une|du|au|aux|est|il|je|on|ou|oui|non|bon|ma|mon|sa|son|ta|ton|tu|ne|ni|si|va|vu|lu|par|pour|sur|qui|que|quoi|mais|car|pas|plus|dont|avec|chez|ici|y)$/;
 /* lettres qui se ressemblent a l'oral */
 var SON = ['BDPTVEGCW', 'AHK', 'MN', 'FS', 'IY'];
 function sonProche(x, y) { for (var q = 0; q < SON.length; q++) if (SON[q].indexOf(x) >= 0 && SON[q].indexOf(y) >= 0) return true; return false; }
@@ -897,6 +899,8 @@ function zoneToAddr(toks) {
     if (/^[a-z0-9]+$/.test(t) && /\d/.test(t)) { out += t.toUpperCase(); i++; continue; }
     var L = letterOf(t); if (L) { out += L; i++; continue; }
     if (FILLER.test(t)) { i++; continue; }
+    /* sigle ecrit en minuscules ("bi 78", "ab 12") : ce sont des lettres d'adresse */
+    if (/^[a-z]{2,3}$/.test(t) && !MOTS.test(t)) { out += t.toUpperCase(); i++; continue; }
     unk.push(t); i++;
   }
   return { addr: out, unk: unk };
@@ -981,7 +985,7 @@ function parseCommande(texte, ctx) {
     if (e > s0) {
       var z = zoneToAddr(tk.slice(s0, e));
       var a = normAddr(z.addr), why = z.unk.length ? 'mots' : '', sure = !z.unk.length;
-      if (a && /^\d+[A-Z]*$/.test(a) && ctx.prefix) {
+      if (a && /^\d+[A-Z]*$/.test(a) && ctx.prefix && !z.unk.length) {
         /* lettre perdue ("53" au lieu de "A53") : on reprend les lettres du rack precedent */
         a = ctx.prefix + a; why = 'prefixe'; sure = sure && a === ctx.predicted;
       }
@@ -1171,8 +1175,11 @@ function startVoice() {
       errCount = 0;
       var ctx = voiceCtx(), cands = [], i;
       for (i = 0; i < res.length; i++) { var p = parseCommande(res[i].transcript, ctx); cands.push({ t: res[i].transcript, p: p, s: scoreParse(p, ctx), c: res[i].confidence || 0 }); }
+      var premier = cands[0];
       cands.sort(function (a, b) { return b.s - a.s; });
       var best = cands[0], unsure = false;
+      /* ce que l'iPhone a ecrit en premier est prioritaire s'il est complet et clair */
+      if (premier.p.addr && premier.p.addr.sure && premier.p.niveaux != null && premier.p.palettes != null && !premier.p.bad) best = premier;
       /* les hypotheses du telephone ne sont pas d'accord sur l'adresse : on fait confirmer */
       for (i = 1; i < cands.length; i++) {
         var o = cands[i];
